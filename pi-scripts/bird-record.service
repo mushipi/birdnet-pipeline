@@ -1,0 +1,13 @@
+[Unit]
+Description=BirdProject Recording
+After=sound.target
+
+[Service]
+ExecStart=/home/mushipi/BirdProject/record.sh
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=0
+User=mushipi
+
+[Install]
+WantedBy=multi-user.target

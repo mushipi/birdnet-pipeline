@@ -1,0 +1,6 @@
+{
+  "smtp_user": "your-account@gmail.com",
+  "smtp_password": "xxxx xxxx xxxx xxxx",
+  "from_addr": "your-account@gmail.com",
+  "to_addr": "recipient@example.com"
+}

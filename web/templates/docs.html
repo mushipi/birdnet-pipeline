@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BirdProject - {{ title }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f6f9;
+      color: #333;
+    }
+
+    header {
+      background: #1a3a2a;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    header a {
+      color: #aed6bc;
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+
+    header a:hover {
+      text-decoration: underline;
+    }
+
+    header a.active {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .doc-nav {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+
+    .doc-nav a {
+      display: block;
+      padding: 10px 18px;
+      text-decoration: none;
+      color: #555;
+      font-size: 0.9rem;
+      border-bottom: 3px solid transparent;
+    }
+
+    .doc-nav a.active {
+      color: #1a3a2a;
+      border-bottom-color: #2d8a5c;
+      font-weight: 700;
+    }
+
+    .doc-nav a:hover {
+      color: #1a3a2a;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* Markdown レンダリング */
+    #content h1 {
+      font-size: 1.7rem;
+      color: #1a3a2a;
+      margin: 0 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 3px solid #2d8a5c;
+    }
+
+    #content h2 {
+      font-size: 1.25rem;
+      color: #fff;
+      background: #2d5a3d;
+      padding: 8px 14px;
+      border-radius: 6px;
+      margin: 32px 0 14px;
+    }
+
+    #content h3 {
+      font-size: 1.05rem;
+      color: #2d5a3d;
+      margin: 22px 0 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #d4edda;
+    }
+
+    #content h4 {
+      font-size: 0.95rem;
+      color: #444;
+      margin: 16px 0 6px;
+    }
+
+    #content p {
+      margin: 0 0 10px;
+      font-size: 0.93rem;
+      line-height: 1.7;
+    }
+
+    #content ul,
+    #content ol {
+      padding-left: 22px;
+      margin: 0 0 10px;
+      font-size: 0.93rem;
+      line-height: 1.7;
+    }
+
+    #content li {
+      margin-bottom: 3px;
+    }
+
+    #content a {
+      color: #2d8a5c;
+    }
+
+    #content code {
+      background: #eef7ee;
+      color: #1a5c2a;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88em;
+    }
+
+    #content pre {
+      background: #1a3a2a;
+      border-radius: 8px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    #content pre code {
+      background: none;
+      color: #aed6bc;
+      padding: 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    #content blockquote {
+      border-left: 4px solid #2d8a5c;
+      background: #eef7ee;
+      padding: 10px 16px;
+      margin: 12px 0;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.9rem;
+      color: #444;
+    }
+
+    #content blockquote p {
+      margin: 0;
+    }
+
+    #content table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+      margin: 12px 0;
+    }
+
+    #content th {
+      background: #2d5a3d;
+      color: #fff;
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    #content td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.88rem;
+      vertical-align: top;
+    }
+
+    #content tr:last-child td {
+      border-bottom: none;
+    }
+
+    #content tr:hover td {
+      background: #f9fdf9;
+    }
+
+    #content hr {
+      border: none;
+      border-top: 2px solid #e0e0e0;
+      margin: 28px 0;
+    }
+
+    #content strong {
+      color: #1a3a2a;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>BirdProject - ドキュメント</h1>
+    <div class="header-right">
+      <a href="/">検出結果</a>
+      <a href="/stats">統計</a>
+      <a href="/settings">設定</a>
+      <a href="/help">使い方</a>
+      <a href="/docs" class="active">文書</a>
+    </div>
+  </header>
+
+  <nav class="doc-nav">
+    <a href="/docs/design" class="{{ 'active' if doc_name == 'design' else '' }}">設計書</a>
+    <a href="/docs/devlog" class="{{ 'active' if doc_name == 'devlog' else '' }}">開発記録</a>
+    <a href="/docs/parabolic" class="{{ 'active' if doc_name == 'parabolic' else '' }}">パラボラ設計</a>
+    <a href="/docs/inference" class="{{ 'active' if doc_name == 'inference' else '' }}">推論レビュー</a>
+  </nav>
+
+  <div class="container">
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const raw = {{ content | tojson }};
+    document.getElementById('content').innerHTML = marked.parse(raw);
+  </script>
+</body>
+
+</html>

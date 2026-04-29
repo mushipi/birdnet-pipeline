@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BirdProject - 統計</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f6f9;
+      color: #333;
+      padding-bottom: 60px;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        padding-bottom: 0;
+      }
+    }
+
+    header {
+      background: #1a3a2a;
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .last-ingest {
+      font-size: 0.78rem;
+      color: #aed6bc;
+    }
+
+    .pi-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.8rem;
+      color: #aed6bc;
+    }
+
+    .pi-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+      flex-shrink: 0;
+    }
+
+    .pi-dot.online {
+      background: #4cdb88;
+      box-shadow: 0 0 6px #4cdb88;
+    }
+
+    .pi-dot.offline {
+      background: #ff5555;
+      box-shadow: 0 0 6px #ff5555;
+    }
+
+    .btn-ingest {
+      padding: 6px 12px;
+      background: #2d8a5c;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .btn-ingest:hover {
+      background: #236b47;
+    }
+
+    .btn-ingest:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    header a {
+      color: #aed6bc;
+      font-size: 0.82rem;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    header a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      padding: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      color: #2d5a3d;
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #d4edda;
+    }
+
+    .section {
+      margin-bottom: 36px;
+    }
+
+    /* サマリーカード */
+    .cards {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .09);
+      text-align: center;
+      min-width: 100px;
+      flex: 1;
+    }
+
+    .card .label {
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .card .value {
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+
+    .card.confirmed .value {
+      color: #155724;
+    }
+
+    .card.pending .value {
+      color: #856404;
+    }
+
+    .card.noise .value {
+      color: #495057;
+    }
+
+    .card.total .value {
+      color: #1a3a2a;
+    }
+
+    /* 種別ランキングテーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .09);
+    }
+
+    th {
+      background: #2d5a3d;
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.9rem;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f9fdf9;
+    }
+
+    .rank {
+      color: #aaa;
+      font-size: 0.8rem;
+      width: 32px;
+    }
+
+    .rank.gold {
+      color: #c8a600;
+      font-weight: 700;
+    }
+
+    .rank.silver {
+      color: #7a7a7a;
+      font-weight: 700;
+    }
+
+    .rank.bronze {
+      color: #a0522d;
+      font-weight: 700;
+    }
+
+    /* チャートグリッド */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 700px) {
+      .chart-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chart-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .09);
+    }
+
+    .chart-box h2 {
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    /* カレンダーヒートマップ */
+    .heatmap-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, .09);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .heatmap-box h2 {
+      font-size: 0.95rem;
+      margin-bottom: 14px;
+    }
+
+    #heatmap-canvas {
+      display: block;
+      min-width: 380px;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 32px;
+      color: #aaa;
+    }
+
+    /* モバイル調整 */
+    @media (max-width: 600px) {
+      .chart-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card .value {
+        font-size: 1.8rem;
+      }
+    }
+
+    /* 期間選択バー */
+    .period-bar {
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .period-bar .period-label {
+      font-size: 0.8rem;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    .quick-btns {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .btn-quick {
+      padding: 5px 12px;
+      border: 1.5px solid #d0d0d0;
+      border-radius: 20px;
+      background: transparent;
+      color: #555;
+      font-size: 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-quick.active,
+    .btn-quick:hover {
+      border-color: #2d8a5c;
+      background: #2d8a5c;
+      color: #fff;
+    }
+
+    .period-custom {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .period-custom input[type="date"] {
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      background: #f9f9f9;
+    }
+
+    .btn-apply {
+      padding: 5px 14px;
+      background: #2d5a3d;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>BirdProject - 統計</h1>
+    <div class="header-right">
+      <a href="/">検出結果</a>
+      <a href="/settings">設定</a>
+      <a href="/help">使い方</a>
+      <a href="/docs">文書</a>
+    </div>
+  </header>
+
+  <!-- 期間選択バー -->
+  <div class="period-bar">
+    <span class="period-label">期間:</span>
+    <div class="quick-btns">
+      <button class="btn-quick" onclick="applyDays(7)">7日</button>
+      <button class="btn-quick" onclick="applyDays(10)">10日</button>
+      <button class="btn-quick" onclick="applyDays(30)">30日</button>
+      <button class="btn-quick" onclick="applyDays(90)">90日</button>
+      <button class="btn-quick" onclick="applyDays(365)">1年</button>
+    </div>
+    <div class="period-custom">
+      <input type="date" id="custom-from" value="{{ date_from }}">
+      <span style="color:#bbb; font-size:0.8rem;">〜</span>
+      <input type="date" id="custom-to" value="{{ date_to }}">
+    </div>
+    <div class="period-custom" style="margin-left:auto; border-left:1px solid #eee; padding-left:12px;">
+      <span class="period-label">信頼度:</span>
+      <input type="number" id="min-conf" value="{{ min_conf }}" step="0.05" min="0" max="1"
+        style="width:55px; padding:4px; border:1px solid #ccc; border-radius:8px; font-size:0.8rem;">
+      <button class="btn-apply" onclick="applyFilters()">適用</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <p style="font-size:0.8rem;color:#888;margin-bottom:14px;">期間: {{ date_from }} 〜 {{ date_to }} &nbsp; (信頼度: {{
+      min_conf }}+)</p>
+
+    <!-- ステータス別件数 -->
+    <div class="section">
+      <h2>ステータス別件数</h2>
+      <div class="cards">
+        {% set total = (status_counts.get('confirmed', 0) + status_counts.get('pending', 0) + status_counts.get('noise',
+        0)) %}
+        <div class="card total">
+          <div class="label">合計</div>
+          <div class="value">{{ total }}</div>
+        </div>
+        <div class="card confirmed">
+          <div class="label">Confirmed</div>
+          <div class="value">{{ status_counts.get('confirmed', 0) }}</div>
+        </div>
+        <div class="card pending">
+          <div class="label">Pending</div>
+          <div class="value">{{ status_counts.get('pending', 0) }}</div>
+        </div>
+        <div class="card noise">
+          <div class="label">Noise</div>
+          <div class="value">{{ status_counts.get('noise', 0) }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- チャートグリッド: ドーナツ + 折れ線 -->
+    <div class="section chart-grid">
+      <div class="chart-box">
+        <h2>種別構成比（Confirmed）</h2>
+        {% if top_species %}
+        <canvas id="donut-chart" height="260"></canvas>
+        {% else %}
+        <div class="empty">データなし</div>
+        {% endif %}
+      </div>
+      <div class="chart-box">
+        <h2>直近7日の検出トレンド</h2>
+        <canvas id="trend-chart" height="260"></canvas>
+      </div>
+    </div>
+
+    <!-- 時間帯別バー -->
+    <div class="section chart-box">
+      <h2>時間帯別検出件数（Confirmed）</h2>
+      <canvas id="hourly-chart" height="140"></canvas>
+    </div>
+
+    <!-- カレンダーヒートマップ -->
+    <div class="section heatmap-box">
+      <h2>検出カレンダー（Confirmed）</h2>
+      <canvas id="heatmap-canvas"></canvas>
+      {% if not daily_counts %}
+      <div class="empty">データなし</div>
+      {% endif %}
+    </div>
+
+    <!-- 上位検出種ランキング -->
+    <div class="section">
+      <h2>上位検出種（Confirmed）</h2>
+      {% if top_species %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th>種名</th>
+            <th style="width:80px; text-align:right;">件数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in top_species %}
+          <tr>
+            <td
+              class="rank {{ 'gold' if loop.index == 1 else ('silver' if loop.index == 2 else ('bronze' if loop.index == 3 else '')) }}">
+              {{ loop.index }}
+            </td>
+            <td>{{ item.species_jp or item.species }}</td>
+            <td style="text-align:right; font-weight:600;">{{ item.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">Confirmed データがありません</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <script>
+    // ---- テンプレートからデータ注入 ----
+    const topSpecies = {{ top_species | tojson }};
+    const hourly = {{ hourly | tojson }};
+    const recent7 = {{ recent_7 | tojson }};
+    const dailyCounts = {{ daily_counts | tojson }};
+
+    // ---- ドーナツチャート（種別構成比）----
+    if (topSpecies.length > 0) {
+      const palette = [
+        '#2d8a5c', '#4cdb88', '#1a3a2a', '#a8d5b5', '#5aaf82',
+        '#81c9a1', '#3b7a57', '#c8e6d5', '#236b47', '#6fc191',
+      ];
+      new Chart(document.getElementById('donut-chart'), {
+        type: 'doughnut',
+        data: {
+          labels: topSpecies.map(d => d.species_jp || d.species),
+          datasets: [{
+            data: topSpecies.map(d => d.count),
+            backgroundColor: topSpecies.map((_, i) => palette[i % palette.length]),
+            borderWidth: 2,
+            borderColor: '#fff',
+          }],
+        },
+        options: {
+          cutout: '62%',
+          plugins: {
+            legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
+          },
+        },
+      });
+    }
+
+    // ---- 折れ線チャート（直近7日トレンド）----
+    new Chart(document.getElementById('trend-chart'), {
+      type: 'line',
+      data: {
+        labels: recent7.map(d => d.date.slice(5)),
+        datasets: [
+          {
+            label: 'Confirmed',
+            data: recent7.map(d => d.confirmed),
+            borderColor: '#2d8a5c', backgroundColor: 'rgba(45,138,92,0.12)',
+            tension: 0.35, fill: true, pointRadius: 4, pointBackgroundColor: '#2d8a5c',
+          },
+          {
+            label: 'Pending',
+            data: recent7.map(d => d.pending),
+            borderColor: '#d4a017', backgroundColor: 'rgba(212,160,23,0.08)',
+            tension: 0.35, fill: true, pointRadius: 3, pointBackgroundColor: '#d4a017',
+            borderDash: [4, 3],
+          },
+        ],
+      },
+      options: {
+        plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 12 } } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f0f0f0' } },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+
+    // ---- 水平バーチャート（時間帯別）----
+    new Chart(document.getElementById('hourly-chart'), {
+      type: 'bar',
+      data: {
+        labels: hourly.map(d => `${String(d.hour).padStart(2, '0')}時`),
+        datasets: [{
+          label: '検出数',
+          data: hourly.map(d => d.count),
+          backgroundColor: hourly.map(d => d.count > 0 ? 'rgba(45,138,92,0.75)' : 'rgba(220,220,220,0.4)'),
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f0f0f0' } },
+          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+
+    // ---- カレンダーヒートマップ（Canvas手書き）----
+    (function () {
+      const canvas = document.getElementById('heatmap-canvas');
+      if (!canvas || Object.keys(dailyCounts).length === 0) return;
+
+      const CELL = 14, GAP = 2, STEP = CELL + GAP;
+      const WEEKS = 26; // 半年分
+      const DAYS = 7;   // 0=Sun ... 6=Sat
+      const PAD_L = 28, PAD_T = 22, PAD_B = 20;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // 表示開始日（26週前の日曜）
+      const start = new Date(today);
+      start.setDate(start.getDate() - (WEEKS * 7) + (7 - today.getDay()) % 7 * -1);
+      // 日曜始まりに揃える
+      start.setDate(start.getDate() - start.getDay());
+
+      const W = PAD_L + WEEKS * STEP;
+      const H = PAD_T + DAYS * STEP + PAD_B;
+      canvas.width = W;
+      canvas.height = H;
+
+      const ctx = canvas.getContext('2d');
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#888';
+
+      // 曜日ラベル
+      ['日', '月', '火', '水', '木', '金', '土'].forEach((d, i) => {
+        if (i % 2 === 0) {
+          ctx.fillText(d, 2, PAD_T + i * STEP + CELL - 2);
+        }
+      });
+
+      // 最大値
+      const maxVal = Math.max(...Object.values(dailyCounts), 1);
+
+      function colorForCount(n) {
+        if (n === 0) return '#ebedf0';
+        const t = Math.min(n / maxVal, 1);
+        // 薄緑→濃緑
+        const r = Math.round(235 - t * (235 - 27));
+        const g = Math.round(237 - t * (237 - 90));
+        const b = Math.round(240 - t * (240 - 59));
+        return `rgb(${Math.round(27 + (1 - t) * (200 - 27))},${Math.round(158 * (1 - t * 0.7) + 27 * t)},${Math.round(27 + (1 - t) * 80)})`;
+      }
+
+      // より見やすいグリーン階調
+      function cellColor(n) {
+        if (n === 0) return '#ebedf0';
+        const t = Math.pow(Math.min(n / maxVal, 1), 0.5);
+        const colors = ['#c6e8d3', '#8ecfaa', '#4cdb88', '#2d8a5c', '#1a3a2a'];
+        const idx = Math.min(Math.floor(t * colors.length), colors.length - 1);
+        return colors[idx];
+      }
+
+      let lastMonth = -1;
+      for (let w = 0; w < WEEKS; w++) {
+        for (let d = 0; d < DAYS; d++) {
+          const cur = new Date(start);
+          cur.setDate(start.getDate() + w * 7 + d);
+          if (cur > today) continue;
+
+          const key = cur.toISOString().slice(0, 10);
+          const count = dailyCounts[key] || 0;
+
+          const x = PAD_L + w * STEP;
+          const y = PAD_T + d * STEP;
+
+          ctx.fillStyle = cellColor(count);
+          ctx.beginPath();
+          ctx.roundRect(x, y, CELL, CELL, 2);
+          ctx.fill();
+
+          // ツールチップ用 title は canvas では無理なので、data-* は不要
+
+          // 月ラベル
+          if (cur.getDate() <= 7 && cur.getMonth() !== lastMonth) {
+            lastMonth = cur.getMonth();
+            ctx.fillStyle = '#666';
+            ctx.fillText((cur.getMonth() + 1) + '月', x, PAD_T - 6);
+          }
+        }
+      }
+
+      // 凡例
+      const LX = PAD_L, LY = H - 14;
+      ctx.fillStyle = '#888';
+      ctx.fillText('少', LX - 2, LY + 10);
+      ['#ebedf0', '#c6e8d3', '#8ecfaa', '#4cdb88', '#2d8a5c'].forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.roundRect(LX + 22 + i * STEP, LY, CELL, CELL, 2);
+        ctx.fill();
+      });
+      ctx.fillStyle = '#888';
+      ctx.fillText('多', LX + 22 + 5 * STEP + 4, LY + 10);
+    })();
+
+    // ---- Pi ステータス ----
+    async function updatePiStatus() {
+      try {
+        const res = await fetch('/api/pi/status');
+        const data = await res.json();
+        const dot = document.getElementById('pi-dot');
+        const label = document.getElementById('pi-label');
+        if (dot && label) {
+          dot.className = 'pi-dot ' + (data.online ? 'online' : 'offline');
+          label.textContent = 'Pi: ' + (data.online ? 'ONLINE' : 'OFFLINE');
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // ---- Ingest ステータス ----
+    async function triggerIngest() {
+      const btn = document.getElementById('ingest-btn');
+      btn.disabled = true; btn.textContent = '起動中...';
+      try {
+        const res = await fetch('/ingest', { method: 'POST' });
+        const data = await res.json();
+        if (res.status === 409) {
+          alert(data.error);
+          btn.textContent = '今すぐ取り込む'; btn.disabled = false;
+        } else {
+          btn.textContent = '実行中...';
+          setTimeout(updateIngestStatus, 2000);
+        }
+      } catch (e) {
+        alert('エラー: ' + e);
+        btn.textContent = '今すぐ取り込む'; btn.disabled = false;
+      }
+    }
+
+    async function updateIngestStatus() {
+      try {
+        const res = await fetch('/ingest/status');
+        const data = await res.json();
+        const el = document.getElementById('last-ingest');
+        if (el) el.textContent = data.last_run ? `最終取り込み: ${data.last_run}` : '最終取り込み: 未実行';
+        const btn = document.getElementById('ingest-btn');
+        if (data.running) {
+          btn.textContent = '実行中...'; btn.disabled = true;
+          setTimeout(updateIngestStatus, 3000);
+        } else {
+          btn.textContent = '今すぐ取り込む'; btn.disabled = false;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // ---- 期間選択 ----
+    const CURRENT_FROM = '{{ date_from }}';
+    const CURRENT_TO = '{{ date_to }}';
+
+    function applyDays(n) {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - (n - 1));
+      const fmt = d => d.toISOString().slice(0, 10);
+      const conf = document.getElementById('min-conf').value;
+      location.href = `/stats?date_from=${fmt(from)}&date_to=${fmt(to)}&min_conf=${conf}`;
+    }
+
+    function applyFilters() {
+      const from = document.getElementById('custom-from').value;
+      const to = document.getElementById('custom-to').value;
+      const conf = document.getElementById('min-conf').value;
+      if (!from || !to) return;
+      location.href = `/stats?date_from=${from}&date_to=${to}&min_conf=${conf}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // 現在の期間に合うクイックボタンをハイライト
+      const from = new Date(CURRENT_FROM);
+      const to = new Date(CURRENT_TO);
+      const days = Math.round((to - from) / 86400000) + 1;
+      document.querySelectorAll('.btn-quick').forEach(btn => {
+        const n = parseInt(btn.textContent);
+        if (n === days || (btn.textContent === '1年' && days >= 365)) btn.classList.add('active');
+      });
+
+      updateIngestStatus();
+      updatePiStatus();
+
+      setInterval(updatePiStatus, 10000);
+    });
+  </script>
+
+  <!-- BOTTOM NAV (mobile) -->
+  <nav style="
+    display:none;
+    position:fixed; bottom:0; left:0; right:0; height:60px;
+    background:#fff; border-top:1px solid #e8e8e8;
+    box-shadow:0 -2px 12px rgba(0,0,0,.08); z-index:200;
+  " id="bottom-nav">
+    <ul style="display:flex; height:100%; margin:0; padding:0; list-style:none;">
+      <li style="flex:1;"><a href="/"
+          style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-decoration:none;color:#888;font-size:0.68rem;gap:3px;"><span
+            style="font-size:1.3rem;">🐦</span><span>検出</span></a></li>
+      <li style="flex:1;"><a href="/stats"
+          style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-decoration:none;color:#1a3a2a;font-size:0.68rem;gap:3px;font-weight:700;"><span
+            style="font-size:1.3rem;">📊</span><span>統計</span></a></li>
+      <li style="flex:1;"><a href="/settings"
+          style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-decoration:none;color:#888;font-size:0.68rem;gap:3px;"><span
+            style="font-size:1.3rem;">⚙️</span><span>設定</span></a></li>
+    </ul>
+  </nav>
+  <script>
+    if (window.innerWidth < 768) document.getElementById('bottom-nav').style.display = 'block';
+    window.addEventListener('resize', () => {
+      document.getElementById('bottom-nav').style.display = window.innerWidth < 768 ? 'block' : 'none';
+    });
+  </script>
+</body>
+
+</html>

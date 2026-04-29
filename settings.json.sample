@@ -1,0 +1,15 @@
+{
+  "ingest_interval_min": 10,
+  "pi_host": "mushipi@<TAILSCALE_IP>",
+  "pi_recordings": "/home/mushipi/recordings/",
+  "record_all_day": true,
+  "record_start_hour": 4,
+  "record_stop_hour": 22,
+  "segment_sec": 60,
+  "processed_dir": "/mnt/hamcam/BirdProject/processed",
+  "raw_ingest_dir": "/home/mushipi/BirdProject/raw_ingest",
+  "db_path": "/mnt/hamcam/BirdProject/db/bird_calls.db",
+  "ebird_api_key": "<EBIRD_API_KEY>",
+  "ebird_region_code": "JP-40",
+  "species_list_file": "ebird_species_list.txt"
+}

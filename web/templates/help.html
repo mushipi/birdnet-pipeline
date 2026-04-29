@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BirdProject - 使い方・仕様</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f6f9;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    header {
+      background: #1a3a2a;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    header a {
+      color: #aed6bc;
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+
+    header a:hover {
+      text-decoration: underline;
+    }
+
+    .toc {
+      background: #fff;
+      border-left: 4px solid #2d8a5c;
+      padding: 16px 20px;
+      margin: 24px auto;
+      max-width: 860px;
+      border-radius: 0 8px 8px 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+    }
+
+    .toc h2 {
+      font-size: 0.9rem;
+      color: #2d5a3d;
+      margin-bottom: 10px;
+    }
+
+    .toc ol {
+      padding-left: 20px;
+    }
+
+    .toc li {
+      margin-bottom: 4px;
+    }
+
+    .toc a {
+      color: #2d8a5c;
+      font-size: 0.88rem;
+      text-decoration: none;
+    }
+
+    .toc a:hover {
+      text-decoration: underline;
+    }
+
+    .container {
+      padding: 0 24px 48px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .section {
+      margin-top: 40px;
+    }
+
+    h2.section-title {
+      font-size: 1.15rem;
+      color: #fff;
+      background: #2d5a3d;
+      padding: 10px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 1rem;
+      color: #2d5a3d;
+      margin: 20px 0 8px;
+      border-bottom: 1px solid #d4edda;
+      padding-bottom: 4px;
+    }
+
+    p {
+      margin-bottom: 10px;
+      font-size: 0.93rem;
+    }
+
+    ul,
+    ol {
+      padding-left: 20px;
+      margin-bottom: 10px;
+      font-size: 0.93rem;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    code {
+      background: #eef7ee;
+      color: #1a5c2a;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88em;
+    }
+
+    .note {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 10px 14px;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.88rem;
+      margin: 12px 0;
+    }
+
+    .info {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      padding: 10px 14px;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.88rem;
+      margin: 12px 0;
+    }
+
+    /* データフロー図 */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+      margin: 16px 0;
+    }
+
+    .flow-box {
+      background: #eef7ee;
+      border: 2px solid #2d8a5c;
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-align: center;
+      min-width: 110px;
+    }
+
+    .flow-box .icon {
+      font-size: 1.6rem;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .flow-box .label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #1a3a2a;
+    }
+
+    .flow-box .sub {
+      font-size: 0.72rem;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .flow-arrow {
+      font-size: 1.4rem;
+      color: #2d8a5c;
+      padding: 0 10px;
+      font-weight: 700;
+    }
+
+    .flow-arrow .desc {
+      font-size: 0.7rem;
+      color: #888;
+      display: block;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    /* ステータスバッジ */
+    .badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .badge-confirmed {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .badge-noise {
+      background: #e2e3e5;
+      color: #495057;
+    }
+
+    /* 確信度バー */
+    .conf-example {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0;
+    }
+
+    .conf-bar {
+      width: 160px;
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      background: #2d8a5c;
+      border-radius: 5px;
+    }
+
+    .conf-fill.low {
+      background: #ffc107;
+    }
+
+    .conf-fill.very-low {
+      background: #dc3545;
+    }
+
+    .conf-label {
+      font-size: 0.85rem;
+      color: #555;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+      margin: 12px 0;
+    }
+
+    th {
+      background: #2d5a3d;
+      color: #fff;
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.88rem;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ファイルパス例 */
+    .path-example {
+      background: #1a3a2a;
+      color: #aed6bc;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      margin: 10px 0;
+      line-height: 1.8;
+    }
+
+    .path-example .comment {
+      color: #5a8a6a;
+    }
+
+    /* FAQ */
+    .faq-item {
+      background: #fff;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+    }
+
+    .faq-q {
+      font-weight: 700;
+      color: #1a3a2a;
+      margin-bottom: 6px;
+    }
+
+    .faq-q::before {
+      content: "Q. ";
+      color: #2d8a5c;
+    }
+
+    .faq-a {
+      font-size: 0.9rem;
+      color: #444;
+    }
+
+    .faq-a::before {
+      content: "A. ";
+      color: #888;
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>BirdProject - 使い方・仕様</h1>
+    <div class="header-right">
+      <a href="/">検出結果一覧</a>
+      <a href="/stats">統計</a>
+      <a href="/settings">設定</a>
+      <a href="/docs">文書</a>
+    </div>
+  </header>
+
+  <!-- 目次 -->
+  <div class="toc">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#overview">システム概要</a></li>
+      <li><a href="#flow">データフロー</a></li>
+      <li><a href="#status">ステータスの定義</a></li>
+      <li><a href="#confidence">確信度（Confidence）の見方</a></li>
+      <li><a href="#screens">各画面の説明</a></li>
+      <li><a href="#settings-detail">設定項目の詳細</a></li>
+      <li><a href="#files">ファイル保存先の構造</a></li>
+      <li><a href="#export">データエクスポート</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="/docs">ドキュメント一覧</a></li>
+    </ol>
+  </div>
+
+  <div class="container">
+
+    <!-- 1. システム概要 -->
+    <div class="section" id="overview">
+      <h2 class="section-title">1. システム概要</h2>
+      <p>
+        BirdProject は Raspberry Pi で録音した野鳥の鳴き声を、
+        N97 サーバー上で <strong>BirdNET</strong>（神経回路網ベースの鳥類音声認識モデル）を使って自動判定し、
+        結果をこの Web UI で確認・管理するシステムです。
+      </p>
+      <ul>
+        <li>録音は設定した<strong>セグメント長（デフォルト 60 秒）単位</strong>の WAV ファイルとして Pi 側に保存されます。</li>
+        <li>BirdNET は録音を内部で <strong>5 秒のチャンクに分割</strong>して推論します。</li>
+        <li>1 ファイル内に複数の種が検知された場合、<strong>種ごとに 1 レコード</strong>として DB に記録されます。</li>
+        <li>観察記録として「この時間・この場所でこの種を確認した」という単位で管理できます。</li>
+        <li>ハードウェアとして、3D プリンタで製作する<strong>パラボリックマイク</strong>を併用可能です（詳細は <a href="/docs">文書一覧</a> 参照）。</li>
+      </ul>
+    </div>
+
+    <!-- 2. データフロー -->
+    <div class="section" id="flow">
+      <h2 class="section-title">2. データフロー</h2>
+      <div class="flow">
+        <div class="flow-box">
+          <span class="icon">🎙</span>
+          <span class="label">Raspberry Pi</span>
+          <span class="sub">録音（arecord）</span>
+        </div>
+        <div class="flow-arrow">
+          →
+          <span class="desc">rsync / 10分ごと</span>
+        </div>
+        <div class="flow-box">
+          <span class="icon">📂</span>
+          <span class="label">N97 raw_ingest/</span>
+          <span class="sub">WAV を受信</span>
+        </div>
+        <div class="flow-arrow">
+          →
+          <span class="desc">cron / 10分ごと</span>
+        </div>
+        <div class="flow-box">
+          <span class="icon">🧠</span>
+          <span class="label">BirdNET 推論</span>
+          <span class="sub">process.py</span>
+        </div>
+        <div class="flow-arrow">
+          →
+          <span class="desc">仕分け・DB記録</span>
+        </div>
+        <div class="flow-box">
+          <span class="icon">🌿</span>
+          <span class="label">Web UI</span>
+          <span class="sub">確認・レビュー</span>
+        </div>
+      </div>
+
+      <h3>各ステップの詳細</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>ステップ</th>
+            <th>処理内容</th>
+            <th>場所</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>録音</strong></td>
+            <td>設定した時間帯に 5 分ごとの WAV ファイルを生成。<code>arecord</code> で 48kHz / 16bit / モノラル録音</td>
+            <td>Pi (<code>record.sh</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>転送</strong></td>
+            <td>10 分ごとに rsync で N97 の <code>raw_ingest/mushipi-bird01/</code> へ push。転送済みファイルは Pi 側から自動削除</td>
+            <td>Pi (<code>sync_to_n97.sh</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>推論</strong></td>
+            <td>ステレオをモノラルに変換し BirdNET で推論。5 秒チャンク単位で全種の確信度を取得</td>
+            <td>N97 (<code>process.py</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>仕分け</strong></td>
+            <td>確信度に応じて <code>detected/</code> / <code>review/</code> / <code>unknown/</code> に振り分け</td>
+            <td>N97 (<code>process.py</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>DB 記録</strong></td>
+            <td>種ごとに 1 レコードを SQLite に INSERT</td>
+            <td>N97 (<code>db.py</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. ステータスの定義 -->
+    <div class="section" id="status">
+      <h2 class="section-title">3. ステータスの定義</h2>
+      <p>各レコードには以下の 3 つのステータスがあります。</p>
+
+      <h3><span class="badge badge-confirmed">confirmed</span> 確定</h3>
+      <p>
+        BirdNET の確信度が <strong>70% 以上</strong>の検知に自動付与されます。
+        信頼度が高く、種の同定がほぼ確実と判断されたレコードです。
+        データエクスポート（学習用データセット作成）の対象になります。
+      </p>
+
+      <h3><span class="badge badge-pending">pending</span> レビュー待ち</h3>
+      <p>
+        確信度が <strong>10% 以上 70% 未満</strong>の検知に自動付与されます。
+        種の可能性はあるものの確証が低い状態です。
+        音声を再生して内容を確認し、「確定」または「ノイズ」に手動で振り分けてください。
+      </p>
+      <div class="note">
+        <strong>操作方法：</strong> 一覧の「確定」ボタンを押すと <code>confirmed</code> に、「ノイズ」ボタンを押すと <code>noise</code> に変更されます。
+      </div>
+
+      <h3><span class="badge badge-noise">noise</span> ノイズ</h3>
+      <p>
+        確信度が <strong>10% 未満</strong>の場合に自動付与されます。
+        または、pending レコードをレビューして「ノイズ」と判断した際に手動設定します。
+        風音・雨音・人工音など、野鳥の鳴き声ではないと判断された録音です。
+      </p>
+    </div>
+
+    <!-- 4. 確信度 -->
+    <div class="section" id="confidence">
+      <h2 class="section-title">4. 確信度（Confidence）の見方</h2>
+      <p>
+        確信度は BirdNET が「この種である」と判断する確率を 0〜100% で表します。
+        5 秒チャンクごとに算出され、同じ種が複数チャンクで検知された場合は<strong>最高値を採用</strong>します。
+      </p>
+
+      <div class="conf-example">
+        <div class="conf-bar">
+          <div class="conf-fill" style="width:90%;"></div>
+        </div>
+        <span class="conf-label"><strong>90%</strong>：非常に高い確信度。ほぼ確実にその種</span>
+      </div>
+      <div class="conf-example">
+        <div class="conf-bar">
+          <div class="conf-fill" style="width:70%;"></div>
+        </div>
+        <span class="conf-label"><strong>70%</strong>：confirmed 閾値。これ以上が自動確定</span>
+      </div>
+      <div class="conf-example">
+        <div class="conf-bar">
+          <div class="conf-fill low" style="width:40%;"></div>
+        </div>
+        <span class="conf-label"><strong>40%</strong>：pending 範囲。要レビュー</span>
+      </div>
+      <div class="conf-example">
+        <div class="conf-bar">
+          <div class="conf-fill very-low" style="width:10%;"></div>
+        </div>
+        <span class="conf-label"><strong>10%</strong>：noise との境界値</span>
+      </div>
+
+      <div class="info">
+        <strong>閾値の設定値：</strong>
+        <code>CONF_HIGH = 0.7</code>（confirmed 下限）、
+        <code>CONF_LOW = 0.1</code>（BirdNET API の最低フィルタ値）
+        — <code>process.py</code> の先頭で変更できます。
+      </div>
+    </div>
+
+    <!-- 5. 各画面の説明 -->
+    <div class="section" id="screens">
+      <h2 class="section-title">5. 各画面の説明</h2>
+
+      <h3>検出結果一覧（/）</h3>
+      <p>すべての検出レコードを一覧表示するメイン画面です。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>UI 要素</th>
+            <th>説明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>タブ（全件 / Pending / Confirmed / Noise）</td>
+            <td>ステータスで一覧を絞り込みます</td>
+          </tr>
+          <tr>
+            <td>Pi フィルタ</td>
+            <td>複数の Pi がある場合に録音元で絞り込みます</td>
+          </tr>
+          <tr>
+            <td>日付フィルタ</td>
+            <td>録音日時の範囲で絞り込みます（録音ファイル名の YYYYMMDD_HHMMSS を基準）</td>
+          </tr>
+          <tr>
+            <td>確信度フィルタ</td>
+            <td>指定した % 以上のレコードのみ表示します</td>
+          </tr>
+          <tr>
+            <td>種名フィルタ</td>
+            <td>英語の種名（common name）で部分一致検索します</td>
+          </tr>
+          <tr>
+            <td>音声プレーヤー</td>
+            <td>WAV ファイルをブラウザで直接再生できます。pending レコードのレビューに使ってください</td>
+          </tr>
+          <tr>
+            <td>確定ボタン</td>
+            <td>pending → confirmed に変更します</td>
+          </tr>
+          <tr>
+            <td>ノイズボタン</td>
+            <td>pending → noise に変更します</td>
+          </tr>
+          <tr>
+            <td>今すぐ取り込むボタン</td>
+            <td><code>ingest_and_process.sh</code> を手動実行します。cron を待たずに即時取り込みたい場合に使います</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>統計（/stats）</h3>
+      <p>DB 全体の集計データを表示します。</p>
+      <ul>
+        <li><strong>ステータス別件数：</strong>confirmed / pending / noise の総数と合計</li>
+        <li><strong>上位検出種（Confirmed）：</strong>confirmed レコードの種名ランキング（上位 20 種）</li>
+        <li><strong>時間帯別検出件数：</strong>0〜23 時の検出件数を棒グラフで表示。野鳥の活動時間帯の把握に使えます</li>
+      </ul>
+
+      <h3>設定（/settings）</h3>
+      <p>システムの動作パラメータを変更します。詳細は次のセクションで説明します。</p>
+    </div>
+
+    <!-- 6. 設定項目 -->
+    <div class="section" id="settings-detail">
+      <h2 class="section-title">6. 設定項目の詳細</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>説明</th>
+            <th>デフォルト値</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>取り込み間隔（分）</strong></td>
+            <td>N97 側の cron で <code>ingest_and_process.sh</code> を実行する間隔。保存すると crontab が自動更新されます</td>
+            <td>10 分</td>
+          </tr>
+          <tr>
+            <td><strong>Pi ホスト</strong></td>
+            <td>Pi の SSH 接続先。Tailscale IP を推奨（例: <code>mushipi@100.125.31.76</code>）</td>
+            <td>mushipi@100.125.31.76</td>
+          </tr>
+          <tr>
+            <td><strong>Pi 側の録音ディレクトリ</strong></td>
+            <td>Pi 上の WAV 保存先。末尾の <code>/</code> を必ず含めてください</td>
+            <td>/home/mushipi/recordings/</td>
+          </tr>
+          <tr>
+            <td><strong>録音セグメント長（秒）</strong></td>
+            <td>
+              1 ファイルあたりの録音長。短いほどタイムスタンプの精度が上がり、
+              同一ファイルへの種の混在が減ります。
+              30 秒未満は BirdNET の分析窓（3 秒チャンク）が少なくなり検知漏れが増えるため非推奨。
+              推論は内部で <code>overlap=1.5</code> 秒のオーバーラップを使用しています。
+            </td>
+            <td>60 秒</td>
+          </tr>
+          <tr>
+            <td><strong>24時間録音</strong></td>
+            <td>
+              チェックすると時間帯フィルタを無効にし、常時録音します。
+              チェックなしの場合は下記の開始・停止時刻が有効になります。
+            </td>
+            <td>オフ</td>
+          </tr>
+          <tr>
+            <td><strong>録音開始時刻（時）</strong></td>
+            <td>
+              「24時間録音」がオフの場合のみ有効。この時刻以降に録音を開始します（0〜23）。
+            </td>
+            <td>4（04:00〜）</td>
+          </tr>
+          <tr>
+            <td><strong>録音停止時刻（時）</strong></td>
+            <td>
+              「24時間録音」がオフの場合のみ有効。この時刻以降は録音しません（例: 22 → 〜21:59）。
+            </td>
+            <td>22（〜21:59）</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <strong>注意：</strong>設定を保存すると SSH 経由で Pi の <code>record_config.sh</code> が上書きされ、
+        <code>bird-record.service</code> が自動再起動されます。
+        録音中のセグメントは破棄されますが、転送済みのファイルには影響しません。
+      </div>
+    </div>
+
+    <!-- 7. ファイル保存先 -->
+    <div class="section" id="files">
+      <h2 class="section-title">7. ファイル保存先の構造</h2>
+      <p>推論後の WAV ファイルは以下の構造で <code>BirdProject/processed/</code> 以下に保存されます。</p>
+      <div class="path-example">
+        BirdProject/processed/<br>
+        └── 2026-03-18/ <span class="comment"># 録音日ごと</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;├── detected/ <span class="comment"># confirmed（確信度 70% 以上）</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── Horornis_diphone/ <span class="comment">#
+          科学名（スペース→アンダースコア）</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 20260318_050012.wav<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;├── review/ <span class="comment"># pending（確信度 10〜70%）</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── 20260318_051500_Conf45_Japanese_Bush_Warbler_None.wav<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span
+          class="comment"># 書式: 日時_Conf確信度_Top1種名.wav</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└── unknown/ <span class="comment"># noise（確信度 10% 未満）</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── 20260318_053000.wav
+      </div>
+      <div class="info">
+        同じ WAV ファイルから複数種が confirmed された場合、物理ファイルは <strong>Top1（最高確信度）の科学名ディレクトリに 1 つだけ</strong>保存されます。
+        複数の DB レコードが同じ <code>file_path</code> を参照します。
+      </div>
+    </div>
+
+    <!-- 8. データエクスポート -->
+    <div class="section" id="export">
+      <h2 class="section-title">8. データエクスポート</h2>
+      <p>
+        <code>GET /export/dataset</code> にアクセスすると、
+        <code>confirmed</code> ステータスのレコードに紐づく WAV ファイルを ZIP 形式でダウンロードできます。
+      </p>
+      <p>ZIP 内の構造：</p>
+      <div class="path-example">
+        bird_dataset.zip<br>
+        ├── Japanese_Bush_Warbler/ <span class="comment"># 種名（スペース→アンダースコア）ごとのフォルダ</span><br>
+        │&nbsp;&nbsp;&nbsp;└── 20260318_050012.wav<br>
+        └── Brown-eared_Bulbul/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└── 20260318_052300.wav
+      </div>
+      <div class="note">
+        <strong>注意：</strong>同じ WAV ファイルが複数種で confirmed されている場合、ZIP 内に重複してコピーされます。
+      </div>
+    </div>
+
+    <!-- 9. FAQ -->
+    <div class="section" id="faq">
+      <h2 class="section-title">9. FAQ</h2>
+
+      <div class="faq-item">
+        <div class="faq-q">「今すぐ取り込む」を押しても何も起きない</div>
+        <div class="faq-a">
+          前回の取り込みが実行中の可能性があります（ロックファイル <code>/tmp/birdproject_ingest.lock</code> が残存）。
+          または <code>raw_ingest/mushipi-bird01/</code> に WAV ファイルがない場合はスキップされます。
+          <code>ingest.log</code> を確認してください。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">1 つの WAV から複数のレコードが生成された</div>
+        <div class="faq-a">
+          正常動作です。5 分の録音内で確信度 70% 以上の種が複数検知された場合、
+          種ごとに 1 レコード作成されます。すべてのレコードが同じ音声ファイルを参照しているので、
+          どのレコードのプレーヤーを再生しても同じ録音が聞けます。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">設定を保存したら「SSH エラー」のような動作になった</div>
+        <div class="faq-a">
+          N97 から Pi への SSH 鍵認証が通っていない可能性があります。
+          また、<code>sudo systemctl restart bird-record.service</code> を
+          <code>mushipi</code> ユーザーがパスワードなしで実行できるように、
+          Pi 側の <code>/etc/sudoers.d/mushipi-bird</code> が設定されているか確認してください。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Pi が録音時間帯内なのに arecord が動いていない</div>
+        <div class="faq-a">
+          <code>bird-record.service</code> の起動確認：
+          <code>sudo systemctl status bird-record.service</code>。
+          USB マイクの認識を確認：<code>arecord -l</code> で <code>hw:0,0</code> が存在するか確認してください。
+          接続し直した後に <code>sudo systemctl restart bird-record.service</code> で再起動できます。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">sync.log に rsync エラーが出る</div>
+        <div class="faq-a">
+          N97 の Tailscale が切れているか、Pi 側の SSH 鍵（<code>~/.ssh/id_ed25519_n97</code>）が
+          N97 の <code>authorized_keys</code> に登録されていない可能性があります。
+          <code>ssh mushipi@100.102.9.77 echo OK</code> で手動接続を確認してください。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">確信度の閾値を変えたい</div>
+        <div class="faq-a">
+          <code>BirdProject/process.py</code> の冒頭にある
+          <code>CONF_HIGH = 0.7</code>（confirmed 下限）と
+          <code>CONF_LOW = 0.1</code>（pending 下限）を変更してください。
+          変更後は次回の取り込みから適用されます（既存レコードは変更されません）。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">セグメント長を短くしたら検知数が減った</div>
+        <div class="faq-a">
+          短いファイルほど BirdNET の 3 秒分析窓の数が減るため、
+          鳥が鳴いた瞬間がウィンドウに入らず検知漏れが起きやすくなります。
+          現在は <code>overlap=1.5</code> 秒のオーバーラップを設定しているため
+          窓を重ねて分析していますが、30 秒未満では効果が限定的です。
+          検知数が重要な場合は 60 秒以上を推奨します。
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Pi が複数台になったらどうする？</div>
+        <div class="faq-a">
+          各 Pi ごとに異なる <code>--pi-id</code>（例: <code>mushipi-bird02</code>）を使い、
+          <code>raw_ingest/mushipi-bird02/</code> へ push するようにします。
+          <code>ingest_and_process.sh</code> に Pi ごとの処理ブロックを追加するか、
+          cron で Pi ごとに別の <code>process.py --pi-id xxx</code> を実行するようにしてください。
+          Web UI のフィルタは Pi ID に対応済みです。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+
+</html>

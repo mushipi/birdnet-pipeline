@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BirdProject - 文書一覧</title>
+    <style>
+        :root {
+            --green-dark: #1a3a2a;
+            --green-mid: #2d5a3d;
+            --green-accent: #2d8a5c;
+            --green-light: #aed6bc;
+            --bg: #f4f6f9;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        header {
+            background: var(--green-dark);
+            color: #fff;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        header a {
+            color: var(--green-light);
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+
+        header a:hover {
+            text-decoration: underline;
+        }
+
+        header a.active {
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .container {
+            padding: 32px 24px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            color: var(--green-mid);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2::before {
+            content: "📄";
+            font-size: 1.5rem;
+        }
+
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        @media (max-width: 500px) {
+            .docs-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .doc-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .doc-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+            border-color: var(--green-accent);
+        }
+
+        .doc-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--green-dark);
+        }
+
+        .doc-file {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #888;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            align-self: flex-start;
+        }
+
+        .doc-desc {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .doc-arrow {
+            margin-top: auto;
+            color: var(--green-accent);
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>BirdProject</h1>
+        <div class="header-right">
+            <a href="/">検出結果</a>
+            <a href="/stats">統計</a>
+            <a href="/settings">設定</a>
+            <a href="/help">使い方</a>
+            <a href="/docs" class="active">文書</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2>文書一覧</h2>
+        <div class="docs-grid">
+            {% for doc in docs %}
+            <a href="/docs/{{ doc.id }}" class="doc-card">
+                <span class="doc-title">{{ doc.title }}</span>
+                <span class="doc-file">{{ doc.file }}</span>
+                <p class="doc-desc">{{ doc.desc }}</p>
+                <span class="doc-arrow">閲覧する ➔</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+
+</html>

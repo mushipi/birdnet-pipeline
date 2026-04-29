@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BirdProject - 検出結果</title>
+  <style>
+    :root {
+      --green-dark: #1a3a2a;
+      --green-mid: #2d5a3d;
+      --green-btn: #2d8a5c;
+      --green-light: #aed6bc;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --border: #e8e8e8;
+      --text: #222;
+      --text-sub: #888;
+      --bottom-h: 60px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      /* モバイルでボトムナビ分の余白 */
+      padding-bottom: var(--bottom-h);
+    }
+
+    @media (min-width: 768px) {
+      body {
+        padding-bottom: 0;
+      }
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      background: var(--green-dark);
+      color: #fff;
+      padding: 0 16px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .header-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .pi-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--green-light);
+      white-space: nowrap;
+    }
+
+    .pi-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #888;
+      flex-shrink: 0;
+      transition: background .4s;
+    }
+
+    .pi-dot.online {
+      background: #4cdb88;
+      box-shadow: 0 0 5px #4cdb88;
+    }
+
+    .pi-dot.offline {
+      background: #ff5555;
+      box-shadow: 0 0 5px #ff5555;
+    }
+
+    .last-ingest {
+      font-size: 0.72rem;
+      color: var(--green-light);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-ingest {
+      padding: 5px 12px;
+      background: var(--green-btn);
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-ingest:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+
+    /* デスクトップ用ナビリンク */
+    .desktop-nav {
+      display: none;
+      gap: 14px;
+    }
+
+    .desktop-nav a {
+      color: var(--green-light);
+      font-size: 0.83rem;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .desktop-nav a:hover {
+      color: #fff;
+    }
+
+    @media (min-width: 768px) {
+      .desktop-nav {
+        display: flex;
+      }
+    }
+
+    /* ===== STATUS TABS (desktop) ===== */
+    .tabs {
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 0 16px;
+    }
+
+    .tabs a {
+      padding: 10px 16px;
+      text-decoration: none;
+      color: var(--text-sub);
+      font-size: 0.88rem;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      flex-shrink: 0;
+    }
+
+    .tabs a.active {
+      color: var(--green-dark);
+      border-bottom-color: var(--green-dark);
+      font-weight: 600;
+    }
+
+    .tabs a:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* ===== FILTER TOGGLE (モバイル) ===== */
+    .filter-toggle-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-filter-toggle {
+      padding: 6px 14px;
+      border: 1.5px solid var(--green-btn);
+      border-radius: 20px;
+      background: transparent;
+      color: var(--green-btn);
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .filter-toggle-bar .count-pill {
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      margin-left: auto;
+    }
+
+    /* デスクトップでは filter-toggle-bar を非表示 */
+    @media (min-width: 768px) {
+      .filter-toggle-bar {
+        display: none;
+      }
+    }
+
+    /* ===== FILTER PANEL ===== */
+    .filter-panel {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      /* モバイルではデフォルト非表示 */
+    }
+
+    .filter-panel.hidden {
+      display: none;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .filter-group label {
+      font-size: 0.82rem;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .filter-panel select,
+    .filter-panel input[type="date"],
+    .filter-panel input[type="number"],
+    .filter-panel input[type="text"] {
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      background: var(--bg);
+    }
+
+    .filter-panel input[type="number"] {
+      width: 70px;
+    }
+
+    .filter-panel input[type="text"] {
+      width: 120px;
+    }
+
+    .btn-search {
+      padding: 6px 16px;
+      background: var(--green-mid);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-clear {
+      padding: 6px 12px;
+      background: #ebebeb;
+      color: #555;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    /* デスクトップでは常に表示 */
+    @media (min-width: 768px) {
+      .filter-panel {
+        display: flex !important;
+      }
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    .main {
+      padding: 12px 16px;
+    }
+
+    @media (min-width: 768px) {
+      .main {
+        padding: 16px 24px;
+        max-width: 1200px;
+      }
+    }
+
+    /* ===== CARD LIST ===== */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .det-card {
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .07);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .det-card:active {
+      background: #f7fdf7;
+    }
+
+    /* カードヘッダー行 */
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .card-species {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .card-species .name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-species .meta {
+      font-size: 0.75rem;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .badge-confirmed {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .badge-noise {
+      background: #e2e3e5;
+      color: #495057;
+    }
+
+    /* 確信度バー */
+    .conf-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .conf-bar {
+      flex: 1;
+      height: 6px;
+      background: #e8e8e8;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--green-btn);
+    }
+
+    .conf-val {
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      width: 44px;
+      text-align: right;
+    }
+
+    /* オーディオ */
+    .card-audio audio {
+      width: 100%;
+      height: 36px;
+      border-radius: 8px;
+    }
+
+    /* アクションボタン */
+    .card-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-action {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-confirm {
+      background: var(--green-btn);
+      color: #fff;
+    }
+
+    .btn-noise-a {
+      background: #e2e3e5;
+      color: #495057;
+    }
+
+    /* デスクトップではカードを2列グリッドに */
+    @media (min-width: 768px) {
+      .card-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+    }
+
+    @media (min-width: 1100px) {
+      .card-list {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-sub);
+      font-size: 0.95rem;
+    }
+
+    .result-count {
+      font-size: 0.82rem;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+    }
+
+    /* ===== BOTTOM NAVIGATION (モバイル) ===== */
+    .bottom-nav {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--bottom-h);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -2px 12px rgba(0, 0, 0, .08);
+      z-index: 200;
+    }
+
+    .bottom-nav ul {
+      display: flex;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .bottom-nav li {
+      flex: 1;
+    }
+
+    .bottom-nav a {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-decoration: none;
+      color: var(--text-sub);
+      font-size: 0.68rem;
+      gap: 3px;
+    }
+
+    .bottom-nav a.active {
+      color: var(--green-dark);
+    }
+
+    .bottom-nav .nav-icon {
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    @media (max-width: 767px) {
+      .bottom-nav {
+        display: block;
+      }
+    }
+
+    /* ===== LOADING INDICATOR ===== */
+    .ingest-running {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: #d4a017;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #f3d48d;
+      border-top-color: #d4a017;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header>
+    <h1>BirdProject</h1>
+    <div class="header-center">
+      <div class="pi-status">
+        <div class="pi-dot" id="pi-dot"></div><span id="pi-label">Pi...</span>
+      </div>
+      <span class="last-ingest" id="last-ingest"></span>
+      <span id="ingest-running-indicator" class="ingest-running" style="display:none;">
+        <span class="spinner"></span>取り込み中
+      </span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ingest" id="ingest-btn" onclick="triggerIngest()">取り込む</button>
+      <div class="desktop-nav">
+        <a href="/stats">統計</a>
+        <a href="/blacklist">除外</a>
+        <a href="/settings">設定</a>
+        <a href="/help">使い方</a>
+        <a href="/docs">文書</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== STATUS TABS ===== -->
+  <div class="tabs">
+    <a href="/" class="{{ 'active' if current_status == 'all'       else '' }}">すべて</a>
+    <a href="/?status=confirmed" class="{{ 'active' if current_status == 'confirmed' else '' }}">Confirmed</a>
+    <a href="/?status=pending" class="{{ 'active' if current_status == 'pending'   else '' }}">Pending</a>
+    <a href="/?status=noise" class="{{ 'active' if current_status == 'noise'     else '' }}">Noise</a>
+  </div>
+
+  <!-- ===== FILTER TOGGLE BAR (モバイル) ===== -->
+  <div class="filter-toggle-bar">
+    <button class="btn-filter-toggle" id="filter-toggle" onclick="toggleFilter()">
+      <span id="filter-icon">▼</span> フィルター
+    </button>
+    <span class="count-pill">{{ rows | length }} 件</span>
+  </div>
+
+  <!-- ===== FILTER PANEL ===== -->
+  <form method="get" action="/">
+    <input type="hidden" name="status" value="{{ current_status if current_status != 'all' else '' }}">
+    <div class="filter-panel hidden" id="filter-panel">
+      <div class="filter-group">
+        <label>Pi</label>
+        <select name="pi_id">
+          <option value="">すべて</option>
+          {% for pid in pi_list %}
+          <option value="{{ pid }}" {% if current_pi_id==pid %}selected{% endif %}>{{ pid }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>日付</label>
+        <input type="date" name="date_from" value="{{ date_from }}">
+        <span style="color:#bbb">〜</span>
+        <input type="date" name="date_to" value="{{ date_to }}">
+      </div>
+      <div class="filter-group">
+        <label>確信度%以上</label>
+        <input type="number" name="min_conf" min="0" max="100" step="1" value="{{ min_conf }}" placeholder="70">
+      </div>
+      <div class="filter-group">
+        <label>種名</label>
+        <input type="text" name="species" value="{{ species }}" placeholder="例: Warbler">
+      </div>
+      <button type="submit" class="btn-search">検索</button>
+      <a href="{{ '/?status=' + current_status if current_status != 'all' else '/' }}" class="btn-clear">クリア</a>
+    </div>
+  </form>
+
+  <!-- ===== MAIN ===== -->
+  <div class="main">
+    <p class="result-count" id="result-count-desktop" style="display:none;">{{ rows | length }} 件</p>
+
+    {% if rows %}
+    <div class="card-list">
+      {% for row in rows %}
+      <div class="det-card">
+
+        <!-- 種名 + バッジ -->
+        <div class="card-header">
+          <div class="card-species">
+            <div class="name">
+              {% if row.species_jp %}
+              {{ row.species_jp }}
+              <span style="font-size: 0.8rem; font-weight: normal; color: #888;">({{ row.species }})</span>
+              {% else %}
+              {{ row.species or "不明" }}
+              {% endif %}
+              {% if row.scientific_name %}
+              <a href="https://www.inaturalist.org/search?q={{ row.scientific_name }}" target="_blank"
+                style="text-decoration:none; vertical-align:middle; margin-left:4px;" title="iNaturalistで調べる">🔍</a>
+              {% endif %}
+            </div>
+            <div class="meta">{{ row.timestamp[:16] }} &nbsp;·&nbsp; {{ row.pi_id }}</div>
+          </div>
+          <span class="badge badge-{{ row.status }}">{{ row.status }}</span>
+        </div>
+
+        <!-- 確信度バー -->
+        {% if row.confidence is not none %}
+        <div class="conf-row">
+          <div class="conf-bar">
+            <div class="conf-fill" style="width:{{ (row.confidence * 100) | int }}%;"></div>
+          </div>
+          <span class="conf-val">{{ "%.1f" | format(row.confidence * 100) }}%</span>
+        </div>
+        {% endif %}
+
+        <!-- 音声 -->
+        {% if row.file_path %}
+        <div class="card-audio">
+          <audio controls preload="none">
+            <source src="/audio/{{ row.file_path.lstrip('/') }}" type="audio/wav">
+          </audio>
+        </div>
+        {% endif %}
+
+        <!-- pending / confirmed 時のアクション -->
+        {% if row.status in ("pending", "confirmed") %}
+        <div class="card-actions">
+          {% if row.status == "pending" %}
+          <form method="post" action="/update/{{ row.id }}" style="flex:1;">
+            <input type="hidden" name="new_status" value="confirmed">
+            <input type="hidden" name="redirect_status" value="{{ current_status if current_status != 'all' else '' }}">
+            <input type="hidden" name="redirect_pi_id" value="{{ current_pi_id }}">
+            <button type="submit" class="btn-action btn-confirm" style="width:100%;">確定</button>
+          </form>
+          <form method="post" action="/update/{{ row.id }}" style="flex:1;">
+            <input type="hidden" name="new_status" value="noise">
+            <input type="hidden" name="redirect_status" value="{{ current_status if current_status != 'all' else '' }}">
+            <input type="hidden" name="redirect_pi_id" value="{{ current_pi_id }}">
+            <button type="submit" class="btn-action btn-noise-a" style="width:100%;">ノイズ</button>
+          </form>
+          {% endif %}
+          {% if row.scientific_name %}
+          <button type="button" class="btn-action btn-blacklist" style="flex:1; background:#c0392b; color:#fff; border:none; padding:6px 0; border-radius:6px; cursor:pointer;"
+            onclick="addToBlacklist('{{ row.scientific_name }}', '{{ row.species or '' }}')">
+            除外登録
+          </button>
+          {% endif %}
+        </div>
+
+        {% if row.scientific_name %}
+        <div class="card-verify" style="margin-top:6px; display:flex; gap:6px; align-items:center; font-size:0.8rem;">
+          <span style="color:#888;">検証:</span>
+          <button onclick="setLabel({{ row.id }}, 'correct')" style="background:{% if row.human_label == 'correct' %}#27ae60{% else %}#eee{% endif %}; color:{% if row.human_label == 'correct' %}#fff{% else %}#555{% endif %}; border:none; padding:3px 10px; border-radius:4px; cursor:pointer;">✓ 正解</button>
+          <button onclick="setLabel({{ row.id }}, 'wrong')" style="background:{% if row.human_label == 'wrong' %}#c0392b{% else %}#eee{% endif %}; color:{% if row.human_label == 'wrong' %}#fff{% else %}#555{% endif %}; border:none; padding:3px 10px; border-radius:4px; cursor:pointer;">✗ 誤検知</button>
+          {% if row.human_label %}
+          <button onclick="setLabel({{ row.id }}, 'clear')" style="background:transparent; color:#888; border:1px solid #ccc; padding:3px 8px; border-radius:4px; cursor:pointer;">解除</button>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% endif %}
+
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">該当するレコードがありません</div>
+    {% endif %}
+  </div>
+
+  <!-- ===== BOTTOM NAV ===== -->
+  <nav class="bottom-nav">
+    <ul>
+      <li>
+        <a href="/" class="active">
+          <span class="nav-icon">🐦</span>
+          <span>検出</span>
+        </a>
+      </li>
+      <li>
+        <a href="/stats">
+          <span class="nav-icon">📊</span>
+          <span>統計</span>
+        </a>
+      </li>
+      <li>
+        <a href="/settings">
+          <span class="nav-icon">⚙️</span>
+          <span>設定</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <script>
+    // ===== Filter toggle =====
+    let filterOpen = false;
+    function toggleFilter() {
+      filterOpen = !filterOpen;
+      const panel = document.getElementById('filter-panel');
+      const icon = document.getElementById('filter-icon');
+      panel.classList.toggle('hidden', !filterOpen);
+      icon.textContent = filterOpen ? '▲' : '▼';
+    }
+    // デスクトップでは件数表示を出す
+    function applyDesktopUI() {
+      const desktop = window.innerWidth >= 768;
+      const cnt = document.getElementById('result-count-desktop');
+      if (cnt) cnt.style.display = desktop ? 'block' : 'none';
+      const panel = document.getElementById('filter-panel');
+      if (desktop) panel.classList.remove('hidden');
+    }
+    applyDesktopUI();
+    window.addEventListener('resize', applyDesktopUI);
+
+    // ===== Pi status =====
+    async function updatePiStatus() {
+      try {
+        const data = await (await fetch('/api/pi/status')).json();
+        const dot = document.getElementById('pi-dot');
+        const lbl = document.getElementById('pi-label');
+        dot.className = 'pi-dot ' + (data.online ? 'online' : 'offline');
+        lbl.textContent = 'Pi ' + (data.online ? 'ONLINE' : 'OFFLINE');
+      } catch (e) { }
+    }
+
+    // ===== Phase 5-C: 人手検証ラベル =====
+    async function setLabel(id, label) {
+      const fd = new FormData();
+      fd.append('label', label);
+      const res = await fetch(`/api/label/${id}`, { method: 'POST', body: fd });
+      if (res.ok) location.reload();
+    }
+
+    // ===== Blacklist =====
+    async function addToBlacklist(sciName, common) {
+      const label = common ? `${common} (${sciName})` : sciName;
+      if (!confirm(`${label} をブラックリストに追加しますか？\n（同種の confirmed/pending を全て noise に降格します）`)) return;
+      const fd = new FormData();
+      fd.append('scientific_name', sciName);
+      fd.append('retroactive', '1');
+      const res = await fetch('/api/blacklist/add', { method: 'POST', body: fd });
+      const j = await res.json();
+      alert(`登録完了\n降格件数: ${j.demoted}`);
+      location.reload();
+    }
+
+    // ===== Ingest =====
+    async function triggerIngest() {
+      const btn = document.getElementById('ingest-btn');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/ingest', { method: 'POST' });
+        const data = await res.json();
+        if (res.status === 409) { alert(data.error); btn.disabled = false; return; }
+        pollIngestStatus();
+      } catch (e) { btn.disabled = false; }
+    }
+    async function pollIngestStatus() {
+      try {
+        const data = await (await fetch('/ingest/status')).json();
+        const btn = document.getElementById('ingest-btn');
+        const ind = document.getElementById('ingest-running-indicator');
+        const lLabel = document.getElementById('last-ingest');
+        if (lLabel && data.last_run) lLabel.textContent = data.last_run.slice(5, 16);
+        if (data.running) {
+          btn.style.display = 'none';
+          if (ind) ind.style.display = 'flex';
+          setTimeout(pollIngestStatus, 3000);
+        } else {
+          btn.style.display = '';
+          btn.disabled = false;
+          if (ind) ind.style.display = 'none';
+        }
+      } catch (e) { }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updatePiStatus();
+      pollIngestStatus();
+      setInterval(updatePiStatus, 10000);
+    });
+  </script>
+</body>
+
+</html>

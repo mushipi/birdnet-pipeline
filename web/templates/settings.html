@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BirdProject - 設定</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f6f9;
+      color: #333;
+    }
+
+    header {
+      background: #1a3a2a;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+    }
+
+    header a {
+      color: #aed6bc;
+      font-size: 0.85rem;
+      text-decoration: none;
+      margin-left: auto;
+    }
+
+    header a:hover {
+      text-decoration: underline;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    .last-ingest {
+      font-size: 0.8rem;
+      color: #aed6bc;
+    }
+
+    .btn-ingest {
+      padding: 6px 14px;
+      background: #2d8a5c;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-ingest:hover {
+      background: #236b47;
+    }
+
+    .btn-ingest:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    .container {
+      padding: 24px;
+      max-width: 600px;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      color: #2d5a3d;
+      margin-bottom: 16px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #d4edda;
+    }
+
+    .form-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px 28px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.87rem;
+      color: #555;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #2d8a5c;
+      box-shadow: 0 0 0 2px rgba(45, 138, 92, .15);
+    }
+
+    .form-group .hint {
+      font-size: 0.78rem;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .btn-save {
+      padding: 10px 28px;
+      background: #2d5a3d;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-save:hover {
+      background: #1a3a2a;
+    }
+
+    .alert-saved {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      border-radius: 4px;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>BirdProject - 設定</h1>
+    <div class="header-right">
+      <span class="last-ingest" id="last-ingest">読み込み中...</span>
+      <button class="btn-ingest" id="ingest-btn" onclick="triggerIngest()">今すぐ取り込む</button>
+      <a href="/">検出結果</a>
+      <a href="/stats">統計</a>
+      <a href="/help">使い方</a>
+      <a href="/docs">文書</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <h2>取り込み設定</h2>
+
+    {% if saved %}
+    <div class="alert-saved">設定を保存しました。crontab 更新・Pi への録音設定反映も完了しました。</div>
+    {% endif %}
+
+    <div class="form-card">
+      <form method="post" action="/settings">
+        <div class="form-group">
+          <label>取り込み間隔（分）</label>
+          <input type="number" name="ingest_interval_min" min="1" max="60" value="{{ settings.ingest_interval_min }}"
+            required>
+          <div class="hint">cron の <code>*/N</code> を変更します。現在: {{ settings.ingest_interval_min }} 分ごと</div>
+        </div>
+        <div class="form-group">
+          <label>Pi ホスト</label>
+          <input type="text" name="pi_host" value="{{ settings.pi_host }}" required>
+          <div class="hint">rsync / ssh の接続先（例: mushipi@100.125.31.76）</div>
+        </div>
+        <div class="form-group">
+          <label>Pi 側の録音ディレクトリ</label>
+          <input type="text" name="pi_recordings" value="{{ settings.pi_recordings }}" required>
+          <div class="hint">末尾の / を含めてください（例: /home/mushipi/recordings/）</div>
+        </div>
+        <div class="form-group">
+          <label>録音セグメント長（秒）</label>
+          <input type="number" name="segment_sec" min="30" max="600" value="{{ settings.segment_sec }}" required>
+          <div class="hint">1ファイルの録音長。30〜600 秒で指定（推奨: 60 秒）</div>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" name="record_all_day" value="1" id="all-day-check" {{ 'checked' if
+              settings.record_all_day else '' }} onchange="toggleTimeFields()">
+            24時間録音（時間帯フィルタを無効にする）
+          </label>
+          <div class="hint">チェックすると録音開始・停止時刻の設定は無視されます</div>
+        </div>
+        <div class="form-group" id="time-fields">
+          <label>録音開始時刻（時）</label>
+          <input type="number" name="record_start_hour" min="0" max="23" value="{{ settings.record_start_hour }}"
+            id="start-hour">
+          <div class="hint">この時刻以降に録音を開始します（例: 4 → 04:00〜）</div>
+        </div>
+        <div class="form-group" id="time-fields-stop">
+          <label>録音停止時刻（時）</label>
+          <input type="number" name="record_stop_hour" min="0" max="23" value="{{ settings.record_stop_hour }}"
+            id="stop-hour">
+          <div class="hint">この時刻以降は録音しません（例: 22 → 〜21:59）</div>
+        </div>
+        <button type="submit" class="btn-save">保存して crontab を更新</button>
+      </form>
+    </div>
+    <h2 style="margin-top:40px;">ラズパイ健康診断</h2>
+    <div class="form-card">
+      <p style="font-size:0.85rem; color:#666; margin-bottom:16px;">
+        ラズパイの接続状態、マイク、時刻同期などを一括でチェックします。
+      </p>
+      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <button class="btn-save" id="btn-health" onclick="runHealthCheck()">診断実行</button>
+        <button class="btn-ingest" id="btn-mic-test" onclick="runMicTest()">マイクテスト録音 (5秒)</button>
+      </div>
+
+      <div id="health-result"
+        style="display:none; border:1px solid #eef; border-radius:8px; padding:12px; background:#fcfdff;">
+        <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+          <tbody id="health-table-body">
+            <!-- 診断結果がここに挿入される -->
+          </tbody>
+        </table>
+      </div>
+
+      <div id="mic-test-result"
+        style="display:none; margin-top:20px; padding:15px; border:1px solid #e8f5e9; border-radius:8px; background:#f1f8e9;">
+        <p style="font-size:0.85rem; font-weight:600; margin-bottom:8px; color:#2e7d32;">✓ テスト録音完了 (5秒):</p>
+        <audio id="mic-player" controls style="width:100%; height:40px;"></audio>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function triggerIngest() {
+      const btn = document.getElementById('ingest-btn');
+      btn.disabled = true;
+      btn.textContent = '起動中...';
+      try {
+        const res = await fetch('/ingest', { method: 'POST' });
+        const data = await res.json();
+        if (res.status === 409) {
+          alert(data.error);
+          btn.textContent = '今すぐ取り込む';
+          btn.disabled = false;
+        } else {
+          btn.textContent = '実行中...';
+          setTimeout(updateIngestStatus, 2000);
+        }
+      } catch (e) {
+        alert('エラーが発生しました: ' + e);
+        btn.textContent = '今すぐ取り込む';
+        btn.disabled = false;
+      }
+    }
+
+    async function updateIngestStatus() {
+      try {
+        const res = await fetch('/ingest/status');
+        const data = await res.json();
+        const el = document.getElementById('last-ingest');
+        if (el) el.textContent = data.last_run ? `最終取り込み: ${data.last_run}` : '最終取り込み: 未実行';
+        const btn = document.getElementById('ingest-btn');
+        if (data.running) {
+          btn.textContent = '実行中...';
+          btn.disabled = true;
+          setTimeout(updateIngestStatus, 3000);
+        } else {
+          btn.textContent = '今すぐ取り込む';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        // ステータス取得失敗は無視
+      }
+    }
+
+    async function runHealthCheck() {
+      const btn = document.getElementById('btn-health');
+      const resDiv = document.getElementById('health-result');
+      const tbody = document.getElementById('health-table-body');
+
+      btn.disabled = true;
+      btn.textContent = '診断中...';
+      resDiv.style.display = 'none';
+      tbody.innerHTML = '';
+
+      try {
+        const res = await fetch('/api/pi/health', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.error) {
+          alert('診断エラー: ' + data.error);
+        } else {
+          const items = [
+            ['マイク状態', data.microphone],
+            ['テスト録音サイズ', data.mic_sample_size.toLocaleString() + ' bytes'],
+            ['時刻同期 (NTP)', data.ntp_synced],
+            ['現在時刻 (Pi)', data.current_time],
+            ['ディスク使用量', data.disk_usage],
+            ['録音サービス', data.service_active],
+            ['CPU温度', data.cpu_temp],
+            ['起動時間', data.uptime]
+          ];
+          items.forEach(([label, val]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="padding:10px 8px; border-bottom:1px solid #eee; color:#666; width:130px;">${label}</td>
+                            <td style="padding:10px 8px; border-bottom:1px solid #eee; font-weight:600;">${val}</td>`;
+            tbody.appendChild(tr);
+          });
+          resDiv.style.display = 'block';
+        }
+      } catch (e) {
+        alert('通信エラー: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '診断実行';
+      }
+    }
+
+    async function runMicTest() {
+      const btn = document.getElementById('btn-mic-test');
+      const resDiv = document.getElementById('mic-test-result');
+      const player = document.getElementById('mic-player');
+
+      btn.disabled = true;
+      btn.textContent = '録音中 (5秒)...';
+      resDiv.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/pi/test_record', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.error) {
+          alert('録音エラー: ' + data.error);
+        } else {
+          player.src = data.url;
+          resDiv.style.display = 'block';
+          player.play();
+        }
+      } catch (e) {
+        alert('通信エラー: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'マイクテスト録音 (5秒)';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateIngestStatus();
+      toggleTimeFields();
+    });
+
+    function toggleTimeFields() {
+      const checked = document.getElementById('all-day-check').checked;
+      const opacity = checked ? '0.4' : '1';
+      const fields = document.getElementById('time-fields');
+      const stopFields = document.getElementById('time-fields-stop');
+      if (fields) fields.style.opacity = opacity;
+      if (stopFields) stopFields.style.opacity = opacity;
+      const startInp = document.getElementById('start-hour');
+      const stopInp = document.getElementById('stop-hour');
+      if (startInp) startInp.disabled = checked;
+      if (stopInp) stopInp.disabled = checked;
+    }
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,19 @@
+{
+  "blacklist_scientific": [
+    "Tadorna ferruginea",
+    "Cygnus cygnus",
+    "Branta bernicla",
+    "Fulmarus glacialis",
+    "Eurystomus orientalis",
+    "Phaethon rubricauda",
+    "Phasianus colchicus",
+    "Aythya fuligula",
+    "Podiceps cristatus",
+    "Uria aalge",
+    "Grus grus",
+    "Botaurus stellaris",
+    "Gavia stellata",
+    "Cathartes aura"
+  ],
+  "reason": "福岡・都市近郊の観測点で地域的にありえない、または稀すぎる種。Phase 4-1 (2026-04-29) で Botaurus stellaris (サンカノゴイ・九州ではほぼ記録なし)、Gavia stellata (アビ・35件は誤検知濃厚)、Cathartes aura (ヒメコンドル・日本に生息せず) を追加"
+}
