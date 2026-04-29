@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdProject - 端末一覧</title>
+<style>
+  :root { --green-dark:#1a3a2a; --green-mid:#2d5a3d; --green-btn:#2d8a5c; --bg:#f4f6f9; --surface:#fff; --border:#e8e8e8; --text:#222; --text-sub:#888; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,sans-serif; background:var(--bg); color:var(--text); padding-bottom:80px; }
+  header { background:var(--green-dark); color:#fff; padding:0 16px; height:52px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+  header h1 { font-size:1.1rem; }
+  .nav { margin-left:auto; display:flex; gap:8px; }
+  .nav a { color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:0.9rem; }
+  .container { max-width:1000px; margin:20px auto; padding:0 16px; }
+  .device-card { background:var(--surface); padding:18px; border-radius:8px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+  .device-info h3 { font-size:1.05rem; margin-bottom:4px; }
+  .device-info .meta { color:var(--text-sub); font-size:0.85rem; }
+  .device-info .meta span { margin-right:12px; }
+  .device-actions { display:flex; gap:10px; align-items:center; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:600; }
+  .badge.on { background:#27ae60; color:#fff; }
+  .badge.off { background:#888; color:#fff; }
+  .badge.nr { background:#3498db; color:#fff; }
+  .btn { background:var(--green-btn); color:#fff; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; text-decoration:none; font-size:0.9rem; }
+  .btn-toggle { padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:6px; cursor:pointer; font-size:0.85rem; }
+  .empty { text-align:center; color:var(--text-sub); padding:40px; background:var(--surface); border-radius:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>端末一覧（Raspberry Pi）</h1>
+  <div class="nav">
+    <a href="/">検出</a><a href="/stats">統計</a><a href="/blacklist">除外</a>
+    <a href="/whitelist">許可</a><a href="/settings">設定</a>
+  </div>
+</header>
+
+<div class="container">
+  {% if devices %}
+  {% for pi_id, d in devices.items() %}
+  <div class="device-card">
+    <div class="device-info">
+      <h3>{{ pi_id }}
+        <span class="badge {{ 'on' if d.enabled else 'off' }}">{{ '有効' if d.enabled else '停止中' }}</span>
+        <span class="badge nr">NR: {{ d.noise_reduction }}</span>
+      </h3>
+      <div class="meta">
+        <span>host: {{ d.host }}</span>
+        <span>lat/lon: {{ d.latitude }}, {{ d.longitude }}</span>
+        <span>seg: {{ d.segment_sec }}s</span>
+        <span>{{ '24h録音' if d.record_all_day else (d.record_start_hour ~ '-' ~ d.record_stop_hour ~ '時') }}</span>
+      </div>
+    </div>
+    <div class="device-actions">
+      <button class="btn-toggle" onclick="toggleDevice('{{ pi_id }}', {{ 'false' if d.enabled else 'true' }})">{{ '停止する' if d.enabled else '有効化' }}</button>
+      <a class="btn" href="/devices/{{ pi_id }}">編集</a>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">登録された端末がありません。<br>settings.json の <code>pi_devices</code> に追加してください。</div>
+  {% endif %}
+</div>
+
+<script>
+async function toggleDevice(piId, enable) {
+  const fd = new FormData();
+  fd.append('enabled', enable ? '1' : '0');
+  const res = await fetch(`/api/devices/${piId}/toggle`, { method: 'POST', body: fd });
+  if (res.ok) location.reload();
+}
+</script>
+</body>
+</html>

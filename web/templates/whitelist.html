@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdProject - ホワイトリスト (eBird)</title>
+<style>
+  :root { --green-dark:#1a3a2a; --green-mid:#2d5a3d; --green-btn:#2d8a5c; --bg:#f4f6f9; --surface:#fff; --border:#e8e8e8; --text:#222; --text-sub:#888; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,sans-serif; background:var(--bg); color:var(--text); padding-bottom:80px; }
+  header { background:var(--green-dark); color:#fff; padding:0 16px; height:52px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+  header h1 { font-size:1.1rem; }
+  .nav { margin-left:auto; display:flex; gap:8px; }
+  .nav a { color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:0.9rem; }
+  .container { max-width:1000px; margin:20px auto; padding:0 16px; }
+  .meta { background:var(--surface); padding:14px 18px; border-radius:8px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .meta-item { font-size:0.9rem; color:var(--text-sub); }
+  .meta-item b { color:var(--text); }
+  .btn { background:var(--green-btn); color:#fff; padding:10px 18px; border:none; border-radius:6px; cursor:pointer; }
+  .btn:disabled { opacity:0.6; cursor:wait; }
+  .btn-disabled { background:#ccc; cursor:not-allowed; }
+  .filter { margin-bottom:14px; }
+  .filter input { width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; }
+  table { width:100%; background:var(--surface); border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05); border-collapse:collapse; }
+  th, td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); font-size:0.9rem; }
+  th { background:var(--green-dark); color:#fff; font-weight:600; }
+  td.sci { font-family:monospace; font-style:italic; color:var(--green-mid); }
+  .empty { text-align:center; color:var(--text-sub); padding:40px; background:var(--surface); border-radius:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ホワイトリスト (eBird)</h1>
+  <div class="nav">
+    <a href="/">検出</a><a href="/stats">統計</a><a href="/blacklist">除外</a>
+    <a href="/labeled">ラベル</a><a href="/settings">設定</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="meta">
+    <div>
+      <div class="meta-item">地域コード: <b>{{ region }}</b></div>
+      <div class="meta-item">登録種数: <b>{{ species|length }}</b></div>
+      <div class="meta-item">最終更新: <b>{{ updated or "未取得" }}</b></div>
+    </div>
+    {% if has_api_key %}
+    <button class="btn" id="refresh-btn" onclick="refreshList()">eBird から再取得</button>
+    {% else %}
+    <button class="btn btn-disabled" disabled title="settings.json に ebird_api_key を設定してください">API key 未設定</button>
+    {% endif %}
+  </div>
+
+  {% if species %}
+  <div class="filter"><input type="text" id="filter" placeholder="学名・英名でフィルタ..." oninput="filterTable()"></div>
+  <table id="species-table">
+    <thead><tr><th style="width:50px;">#</th><th>学名 (Scientific)</th><th>英名 (Common)</th></tr></thead>
+    <tbody>
+    {% for s in species %}
+      <tr><td>{{ loop.index }}</td><td class="sci">{{ s.sci }}</td><td>{{ s.common }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">ホワイトリストファイルがまだ生成されていません。<br>右上の「eBird から再取得」を押してください。</div>
+  {% endif %}
+</div>
+
+<script>
+async function refreshList() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true; btn.textContent = '取得中...';
+  const res = await fetch('/api/whitelist/refresh', { method: 'POST' });
+  const j = await res.json();
+  alert(j.ok ? ('完了:\n' + j.stdout) : ('エラー:\n' + j.stderr));
+  location.reload();
+}
+function filterTable() {
+  const q = document.getElementById('filter').value.toLowerCase();
+  document.querySelectorAll('#species-table tbody tr').forEach(tr => {
+    tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

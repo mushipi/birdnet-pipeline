@@ -468,6 +468,40 @@ BirdProject/processed/
 | processed_dir | str | 推論済み WAV の保存先（外部 HDD `/mnt/hamcam` 推奨） |
 | raw_ingest_dir | str | Pi から rsync される WAV の受け皿 |
 | db_path | str | SQLite DB のパス（外部 HDD `/mnt/hamcam` 推奨） |
+| ebird_api_key | str | eBird API キー（機密、git 除外）|
+| ebird_region_code | str | 観察地域コード（例: `JP-40` = 福岡県）|
+| species_list_file | str | BirdNET 許可種リストファイル名 |
+| pi_devices | object | 端末別設定。下記 §11.1 |
+
+### 11.1 端末別設定 (`pi_devices`)
+
+Pi 単位で以下を設定。Web UI の `/devices/{pi_id}` で編集可能。
+
+```json
+"pi_devices": {
+  "mushipi-bird01": {
+    "host": "mushipi@100.78.71.38",
+    "latitude": 33.57869,
+    "longitude": 130.257151,
+    "noise_reduction": "highpass",
+    "record_all_day": true,
+    "record_start_hour": 4,
+    "record_stop_hour": 22,
+    "segment_sec": 60,
+    "enabled": true
+  }
+}
+```
+
+| キー | 型 | 説明 |
+|------|----|------|
+| host | str | SSH 接続先 |
+| latitude / longitude | float | 録音地点（BirdNET の地域フィルタに使用） |
+| noise_reduction | str | `off` / `highpass` / `spectral` / `highpass+spectral` |
+| record_all_day | bool | 24h 録音 |
+| record_start_hour / record_stop_hour | int | 時間帯録音時の範囲 |
+| segment_sec | int | セグメント長（秒）|
+| enabled | bool | false で `process.py` がスキップ |
 
 ---
 
@@ -481,8 +515,10 @@ BirdProject/processed/
 | sensitivity | 1.25 | `process.py` の `Recording()` の `sensitivity=` 引数 |
 | min_conf | 0.25 | `process.py` の `CONF_LOW`（これ未満は API 側でフィルタ） |
 | confirmed 閾値 | 0.65 | `process.py` の `CONF_HIGH` |
-| latitude | 33.57869 | `process.py --latitude` または `process.py` の argparse デフォルト |
-| longitude | 130.257151 | `process.py --longitude` または `process.py` の argparse デフォルト |
+| latitude / longitude | 33.57869 / 130.257151 | `pi_devices.{pi_id}.latitude/longitude` または argparse |
+| ノイズ除去 | `highpass` 既定 | `pi_devices.{pi_id}.noise_reduction`（端末別、`/devices` で編集）|
+| 許可種リスト | eBird 福岡県 294種 | `species_list_file` を analyzer に渡す（Phase 5-A/5-B）|
+| ブラックリスト | 学名ベース | `species_blacklist.json` または `/blacklist` で編集 |
 
 ### overlap の効果
 

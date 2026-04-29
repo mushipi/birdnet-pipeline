@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdProject - デイリーレポート</title>
+<style>
+  :root { --green-dark:#1a3a2a; --green-mid:#2d5a3d; --green-btn:#2d8a5c; --bg:#f4f6f9; --surface:#fff; --border:#e8e8e8; --text:#222; --text-sub:#888; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,sans-serif; background:var(--bg); color:var(--text); padding-bottom:80px; }
+  header { background:var(--green-dark); color:#fff; padding:0 16px; height:52px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+  header h1 { font-size:1.1rem; }
+  .nav { margin-left:auto; display:flex; gap:8px; }
+  .nav a { color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:0.9rem; }
+  .container { max-width:900px; margin:20px auto; padding:0 16px; }
+  .toolbar { background:var(--surface); padding:14px 18px; border-radius:8px; margin-bottom:14px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .toolbar select { padding:8px; border:1px solid var(--border); border-radius:6px; }
+  .btn { background:var(--green-btn); color:#fff; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; }
+  .btn:disabled { opacity:0.6; cursor:wait; }
+  .report-frame { background:var(--surface); padding:0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .report-frame iframe { width:100%; min-height:800px; border:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>デイリーレポート</h1>
+  <div class="nav">
+    <a href="/">検出</a><a href="/stats">統計</a><a href="/blacklist">除外</a>
+    <a href="/whitelist">許可</a><a href="/labeled">ラベル</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <label>日付:</label>
+    <select id="date-select" onchange="changeDate(this.value)">
+      {% for d in available_dates %}
+      <option value="{{ d }}" {% if d == current_date %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" id="send-btn" onclick="sendReport()">前日のレポートを今すぐメール送信</button>
+  </div>
+
+  <div class="report-frame">
+    <iframe srcdoc="{{ report_html | e }}"></iframe>
+  </div>
+</div>
+
+<script>
+function changeDate(d) { location.href = '/reports?date=' + d; }
+async function sendReport() {
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true; btn.textContent = '送信中...';
+  const res = await fetch('/api/reports/send', { method: 'POST' });
+  const j = await res.json();
+  alert(j.ok ? '送信完了\n' + j.output : '送信失敗\n' + j.output);
+  btn.disabled = false; btn.textContent = '前日のレポートを今すぐメール送信';
+}
+</script>
+</body>
+</html>

@@ -96,26 +96,63 @@ def parse_timestamp(wav_path: Path) -> datetime:
     return datetime.fromtimestamp(wav_path.stat().st_mtime)
 
 
-def to_mono(wav_path: Path) -> Path | None:
-    """ステレオ WAV をモノラルに変換して一時ファイルを返す。失敗時は None。"""
+def get_pi_config(pi_id: str | None) -> dict:
+    """settings.json の pi_devices から該当端末の設定を取得。なければ legacy 設定にフォールバック。"""
+    devices = _settings.get("pi_devices", {})
+    if pi_id and pi_id in devices:
+        return devices[pi_id]
+    # legacy fallback
+    return {
+        "noise_reduction": _settings.get("noise_reduction", "highpass"),
+        "latitude": _settings.get("latitude", 33.57869),
+        "longitude": _settings.get("longitude", 130.257151),
+        "enabled": True,
+    }
+
+
+def preprocess_audio(wav_path: Path, noise_reduction: str = "highpass") -> Path | None:
+    """モノラル変換 + 設定に応じたノイズ除去を行う。
+    noise_reduction:
+      - 'off'                 : モノラル変換のみ
+      - 'highpass'            : 500Hz ハイパスフィルタ（既定）
+      - 'spectral'            : noisereduce による定常ノイズ除去
+      - 'highpass+spectral'   : 両方適用
+    """
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     tmp.close()
+    out_path = Path(tmp.name)
+
+    sox_cmd = ["sox", str(wav_path), "-c", "1", str(out_path)]
+    if "highpass" in noise_reduction:
+        sox_cmd += ["highpass", "500"]
     try:
-        subprocess.run(
-            ["sox", str(wav_path), "-c", "1", tmp.name, "highpass", "500"],
-            check=True,
-            capture_output=True,
-        )
-        return Path(tmp.name)
+        subprocess.run(sox_cmd, check=True, capture_output=True)
     except subprocess.CalledProcessError as e:
         print(f"  [ERROR] sox failed: {e.stderr.decode()}")
-        Path(tmp.name).unlink(missing_ok=True)
+        out_path.unlink(missing_ok=True)
         return None
 
+    if "spectral" in noise_reduction:
+        try:
+            import noisereduce as nr
+            import soundfile as sf
+            data, rate = sf.read(str(out_path))
+            reduced = nr.reduce_noise(y=data, sr=rate, stationary=True)
+            sf.write(str(out_path), reduced, rate)
+        except Exception as e:
+            print(f"  [WARN] spectral denoise failed (continuing without): {e}")
 
-def analyze_file(analyzer: Analyzer, wav_path: Path, ts: datetime, lat: float, lon: float) -> list:
-    """ステレオ→モノラル変換後に birdnetlib で推論し、confidence 降順のリストを返す。失敗時は []。"""
-    mono_path = to_mono(wav_path)
+    return out_path
+
+
+def to_mono(wav_path: Path) -> Path | None:
+    """後方互換：preprocess_audio(highpass) のラッパー。"""
+    return preprocess_audio(wav_path, "highpass")
+
+
+def analyze_file(analyzer: Analyzer, wav_path: Path, ts: datetime, lat: float, lon: float, noise_reduction: str = "highpass") -> list:
+    """前処理（モノラル+ノイズ除去）後に birdnetlib で推論し、confidence 降順のリストを返す。失敗時は []。"""
+    mono_path = preprocess_audio(wav_path, noise_reduction)
     if mono_path is None:
         return []
     try:
@@ -170,12 +207,22 @@ def aggregate_by_species(detections: list, min_conf: float) -> dict[str, dict]:
 
 
 def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
+    # Pi 別設定を取得（noise_reduction や lat/lon の上書き）
+    pi_config = get_pi_config(pi_id)
+    if not pi_config.get("enabled", True):
+        print(f"[skip] {pi_id} は disabled 設定のためスキップ")
+        return
+    nr_mode = pi_config.get("noise_reduction", "highpass")
+    # CLI 引数 lat/lon と Pi 設定の lat/lon は CLI 優先（明示指定された場合）
+    eff_lat = pi_config.get("latitude", lat) if lat == 33.57869 else lat
+    eff_lon = pi_config.get("longitude", lon) if lon == 130.257151 else lon
+
     wav_files = sorted(ingest_dir.glob("*.wav"))
     if not wav_files:
         print(f"raw_ingest に WAV ファイルが見つからないわ: {ingest_dir}")
         return
 
-    print(f"Analyzer をロード中...")
+    print(f"Analyzer をロード中... (pi_id={pi_id}, noise_reduction={nr_mode})")
     analyzer = Analyzer()
     if _SPECIES_LIST:
         # eBird 由来などのホワイトリストを Analyzer に登録（地域・季節フィルタを補強）
@@ -190,7 +237,7 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
             continue
         print(f"\n処理中: {wav_path.name}")
         ts = parse_timestamp(wav_path)
-        detections = analyze_file(analyzer, wav_path, ts, lat, lon)
+        detections = analyze_file(analyzer, wav_path, ts, eff_lat, eff_lon, noise_reduction=nr_mode)
         detections = filter_blacklist(detections, wav_path.name)
         date_str = ts.strftime("%Y-%m-%d")
 

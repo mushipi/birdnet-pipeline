@@ -129,35 +129,37 @@ async def help_page(request: Request):
     return templates.TemplateResponse("help.html", {"request": request})
 
 
+DOC_REGISTRY = [
+    {"id": "readme", "title": "README", "file": "README.md", "desc": "プロジェクト概要・セットアップ手順", "section": "概要"},
+    {"id": "docs_index", "title": "ドキュメント目次", "file": "docs/README.md", "desc": "全ドキュメントの索引・追加ルール", "section": "概要"},
+    {"id": "design", "title": "設計書", "file": "DESIGN.md", "desc": "システム全体構造、ハードウェア、ネットワーク構成", "section": "設計"},
+    {"id": "devlog", "title": "開発記録", "file": "DEVLOG.md", "desc": "実装経緯・修正履歴・技術的決定事項", "section": "設計"},
+    {"id": "parabolic", "title": "パラボリックマイク設計", "file": "docs/hardware/parabolic_mic.md", "desc": "3Dプリント製パラボリックマイクの詳細設計", "section": "ハードウェア"},
+    {"id": "future_models", "title": "モデル性能向上 中長期計画", "file": "docs/plans/future_model_improvements.md", "desc": "Phase 5-D/5-E のロードマップ", "section": "計画"},
+    {"id": "archive_index", "title": "アーカイブ目次", "file": "archive/README.md", "desc": "過去資料の索引", "section": "アーカイブ"},
+    {"id": "inference_review", "title": "推論精度レビュー（2026-03）", "file": "archive/inference_review_2026-03-20.md", "desc": "Phase 4 で実装済みの提案集", "section": "アーカイブ"},
+    {"id": "vm_q1", "title": "VM-Q1 マイク検証", "file": "archive/vm_q1_report.md", "desc": "採用見送りマイクの検証レポート", "section": "アーカイブ"},
+]
+
+
 @app.get("/docs")
 async def docs_list(request: Request):
-    docs = [
-        {"id": "design", "title": "設計書", "file": "DESIGN.md", "desc": "システムの全体構造、ハードウェア、ネットワーク構成など"},
-        {"id": "devlog", "title": "開発記録", "file": "DEVLOG.md", "desc": "実装の経緯、修正履歴、技術的決定事項"},
-        {"id": "parabolic", "title": "パラボリックマイク設計", "file": "docs/hardware/parabolic_mic.md", "desc": "3Dプリント製パラボリックマイクの詳細設計資料"},
-    ]
-    return templates.TemplateResponse("docs_list.html", {"request": request, "docs": docs})
+    return templates.TemplateResponse("docs_list.html", {"request": request, "docs": DOC_REGISTRY})
 
 
 @app.get("/docs/{doc_name}")
 async def docs_page(request: Request, doc_name: str):
     from fastapi import HTTPException
-    files = {
-        "design": PROJECT_DIR / "DESIGN.md",
-        "devlog": PROJECT_DIR / "DEVLOG.md",
-        "parabolic": PROJECT_DIR / "docs" / "hardware" / "parabolic_mic.md",
-    }
-    if doc_name not in files:
+    entry = next((d for d in DOC_REGISTRY if d["id"] == doc_name), None)
+    if not entry:
         raise HTTPException(status_code=404)
-    content = files[doc_name].read_text(encoding="utf-8")
-    titles = {
-        "design": "設計書",
-        "devlog": "開発記録",
-        "parabolic": "パラボリックマイク設計",
-    }
+    path = PROJECT_DIR / entry["file"]
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"file not found: {entry['file']}")
+    content = path.read_text(encoding="utf-8")
     return templates.TemplateResponse(
         "docs.html",
-        {"request": request, "content": content, "title": titles[doc_name], "doc_name": doc_name},
+        {"request": request, "content": content, "title": entry["title"], "doc_name": doc_name},
     )
 
 
@@ -425,6 +427,257 @@ async def set_label(detection_id: int, label: str = Form(...)):
         return JSONResponse(status_code=400, content={"error": "invalid label"})
     db.set_human_label(detection_id, new_label)
     return {"ok": True, "id": detection_id, "label": new_label}
+
+
+# ─────────────────── ラベルデータ統計 (Phase 5-C 表示) ───────────────────
+
+@app.get("/labeled")
+async def labeled_page(request: Request):
+    import sqlite3
+    conn = sqlite3.connect(db.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    summary = {row["human_label"]: row["cnt"] for row in conn.execute(
+        "SELECT human_label, COUNT(*) as cnt FROM detections "
+        "WHERE human_label IS NOT NULL GROUP BY human_label"
+    )}
+    by_species = conn.execute(
+        "SELECT species, species_jp, scientific_name, "
+        "SUM(CASE WHEN human_label='correct' THEN 1 ELSE 0 END) as correct_cnt, "
+        "SUM(CASE WHEN human_label='wrong' THEN 1 ELSE 0 END) as wrong_cnt "
+        "FROM detections WHERE human_label IS NOT NULL "
+        "GROUP BY species ORDER BY (correct_cnt + wrong_cnt) DESC"
+    ).fetchall()
+    conn.close()
+    return templates.TemplateResponse(
+        "labeled.html",
+        {
+            "request": request,
+            "correct": summary.get("correct", 0),
+            "wrong": summary.get("wrong", 0),
+            "by_species": [dict(r) for r in by_species],
+        },
+    )
+
+
+@app.get("/api/labeled/export")
+async def labeled_export():
+    import io, csv, sqlite3, zipfile
+    conn = sqlite3.connect(db.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, species, scientific_name, confidence, human_label, file_path "
+        "FROM detections WHERE human_label IN ('correct','wrong') ORDER BY species, id"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        return JSONResponse(status_code=404, content={"error": "ラベル付きデータがありません"})
+
+    csv_buf = io.StringIO()
+    writer = csv.writer(csv_buf)
+    writer.writerow(["id","species","scientific_name","confidence","human_label","file_path"])
+    buf = io.BytesIO()
+    added = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+        for r in rows:
+            writer.writerow([r["id"], r["species"], r["scientific_name"],
+                             f"{r['confidence']:.3f}" if r["confidence"] else "",
+                             r["human_label"], r["file_path"]])
+            wav = Path(r["file_path"])
+            if wav.exists():
+                sci = (r["scientific_name"] or "unknown").replace(" ", "_")
+                zf.write(wav, f"{r['human_label']}/{sci}/{r['id']}_{wav.name}")
+                added += 1
+        zf.writestr("metadata.csv", csv_buf.getvalue())
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=labeled_dataset.zip"},
+    )
+
+
+# ─────────────────── eBird ホワイトリスト (Phase 5-A/5-B 表示) ───────────────────
+
+@app.get("/whitelist")
+async def whitelist_page(request: Request):
+    settings = load_settings()
+    species_file = settings.get("species_list_file", "ebird_species_list.txt")
+    file = PROJECT_DIR / species_file if not Path(species_file).is_absolute() else Path(species_file)
+    species = []
+    updated = None
+    if file.exists():
+        for line in file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                sci, _, com = line.partition("_")
+                species.append({"sci": sci, "common": com})
+        JST = timezone(timedelta(hours=9))
+        updated = datetime.fromtimestamp(file.stat().st_mtime, tz=JST).strftime("%Y-%m-%d %H:%M")
+
+    return templates.TemplateResponse(
+        "whitelist.html",
+        {
+            "request": request,
+            "species": species,
+            "updated": updated,
+            "region": settings.get("ebird_region_code", "(未設定)"),
+            "file_path": str(file),
+            "has_api_key": bool(settings.get("ebird_api_key")),
+        },
+    )
+
+
+@app.post("/api/whitelist/refresh")
+async def whitelist_refresh():
+    """tools/fetch_ebird_species.py を実行してホワイトリストを更新"""
+    result = subprocess.run(
+        ["uv", "run", "python", "tools/fetch_ebird_species.py"],
+        cwd=str(PROJECT_DIR),
+        capture_output=True, text=True, timeout=120,
+    )
+    return {
+        "ok": result.returncode == 0,
+        "stdout": result.stdout[-2000:],
+        "stderr": result.stderr[-2000:],
+    }
+
+
+# ─────────────────── デイリーレポート閲覧 (Gmail 機能 表示) ───────────────────
+
+@app.get("/reports")
+async def reports_page(request: Request, date: str | None = None):
+    sys.path.insert(0, str(PROJECT_DIR / "tools"))
+    from daily_report import get_summary, render_html, load_db_path
+    from datetime import date as date_cls
+    JST = timezone(timedelta(hours=9))
+
+    if date:
+        try:
+            target = date_cls.fromisoformat(date)
+        except ValueError:
+            target = (datetime.now(JST) - timedelta(days=1)).date()
+    else:
+        target = (datetime.now(JST) - timedelta(days=1)).date()
+
+    start = datetime.combine(target, datetime.min.time(), JST)
+    end = start + timedelta(days=1)
+    db_path = load_db_path()
+    status_counts, species_list, hourly, pi_counts = get_summary(
+        db_path, start.strftime("%Y-%m-%dT%H:%M:%S"), end.strftime("%Y-%m-%dT%H:%M:%S"),
+    )
+    report_html = render_html(target.strftime("%Y-%m-%d"), status_counts, species_list, hourly, pi_counts)
+
+    # 直近 14日分の選択肢
+    today = datetime.now(JST).date()
+    available_dates = [(today - timedelta(days=i)).isoformat() for i in range(1, 15)]
+
+    return templates.TemplateResponse(
+        "reports.html",
+        {
+            "request": request,
+            "report_html": report_html,
+            "current_date": target.isoformat(),
+            "available_dates": available_dates,
+        },
+    )
+
+
+@app.post("/api/reports/send")
+async def reports_send():
+    """tools/daily_report.py を実行して即時送信"""
+    result = subprocess.run(
+        ["uv", "run", "python", "tools/daily_report.py"],
+        cwd=str(PROJECT_DIR),
+        capture_output=True, text=True, timeout=60,
+    )
+    return {"ok": result.returncode == 0, "output": (result.stdout + result.stderr)[-1500:]}
+
+
+# ─────────────────── 端末別設定 (/devices) ───────────────────
+
+NOISE_REDUCTION_OPTIONS = ["off", "highpass", "spectral", "highpass+spectral"]
+
+
+@app.get("/devices")
+async def devices_page(request: Request):
+    s = load_settings()
+    devices = s.get("pi_devices", {})
+    return templates.TemplateResponse(
+        "devices.html",
+        {"request": request, "devices": devices},
+    )
+
+
+@app.get("/devices/{pi_id}")
+async def device_edit_page(request: Request, pi_id: str):
+    s = load_settings()
+    devices = s.get("pi_devices", {})
+    device = devices.get(pi_id)
+    if device is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"device not found: {pi_id}")
+    return templates.TemplateResponse(
+        "device_edit.html",
+        {
+            "request": request,
+            "pi_id": pi_id,
+            "device": device,
+            "noise_options": NOISE_REDUCTION_OPTIONS,
+        },
+    )
+
+
+@app.post("/devices/{pi_id}")
+async def device_save(
+    pi_id: str,
+    host: str = Form(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+    noise_reduction: str = Form(...),
+    record_all_day: str = Form(""),
+    record_start_hour: int = Form(4),
+    record_stop_hour: int = Form(22),
+    segment_sec: int = Form(60),
+    enabled: str = Form(""),
+):
+    if noise_reduction not in NOISE_REDUCTION_OPTIONS:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="invalid noise_reduction")
+    s = load_settings()
+    devices = s.setdefault("pi_devices", {})
+    is_enabled = enabled == "1"
+    is_all_day = record_all_day == "1"
+    devices[pi_id] = {
+        "host": host,
+        "latitude": latitude,
+        "longitude": longitude,
+        "noise_reduction": noise_reduction,
+        "record_all_day": is_all_day,
+        "record_start_hour": record_start_hour,
+        "record_stop_hour": record_stop_hour,
+        "segment_sec": segment_sec,
+        "enabled": is_enabled,
+    }
+    save_settings(s)
+    # 設定有効化時は Pi 側へも push
+    if is_enabled:
+        try:
+            push_record_config_to_pi(host, record_start_hour, record_stop_hour, segment_sec, is_all_day)
+        except Exception:
+            pass
+    return RedirectResponse(f"/devices/{pi_id}?saved=1", status_code=303)
+
+
+@app.post("/api/devices/{pi_id}/toggle")
+async def device_toggle(pi_id: str, enabled: str = Form(...)):
+    s = load_settings()
+    devices = s.setdefault("pi_devices", {})
+    if pi_id not in devices:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+    devices[pi_id]["enabled"] = enabled == "1"
+    save_settings(s)
+    return {"ok": True, "pi_id": pi_id, "enabled": devices[pi_id]["enabled"]}
 
 
 @app.post("/api/blacklist/remove")

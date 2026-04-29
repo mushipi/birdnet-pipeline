@@ -11,5 +11,18 @@
   "db_path": "/mnt/hamcam/BirdProject/db/bird_calls.db",
   "ebird_api_key": "<EBIRD_API_KEY>",
   "ebird_region_code": "JP-40",
-  "species_list_file": "ebird_species_list.txt"
+  "species_list_file": "ebird_species_list.txt",
+  "pi_devices": {
+    "<PI_ID>": {
+      "host": "mushipi@<TAILSCALE_IP>",
+      "latitude": 33.57869,
+      "longitude": 130.257151,
+      "noise_reduction": "highpass",
+      "record_all_day": true,
+      "record_start_hour": 4,
+      "record_stop_hour": 22,
+      "segment_sec": 60,
+      "enabled": true
+    }
+  }
 }

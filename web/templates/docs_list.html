@@ -162,8 +162,12 @@
 
     <div class="container">
         <h2>文書一覧</h2>
+        {% set sections = [] %}
+        {% for d in docs %}{% if d.section not in sections %}{% set _ = sections.append(d.section) %}{% endif %}{% endfor %}
+        {% for sec in sections %}
+        <h3 style="margin-top:20px; color:#666; font-size:0.9rem; border-bottom:1px solid #ddd; padding-bottom:6px;">{{ sec }}</h3>
         <div class="docs-grid">
-            {% for doc in docs %}
+            {% for doc in docs if doc.section == sec %}
             <a href="/docs/{{ doc.id }}" class="doc-card">
                 <span class="doc-title">{{ doc.title }}</span>
                 <span class="doc-file">{{ doc.file }}</span>
@@ -172,6 +176,7 @@
             </a>
             {% endfor %}
         </div>
+        {% endfor %}
     </div>
 </body>
 

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdProject - ラベル統計</title>
+<style>
+  :root { --green-dark:#1a3a2a; --green-mid:#2d5a3d; --green-btn:#2d8a5c; --bg:#f4f6f9; --surface:#fff; --border:#e8e8e8; --text:#222; --text-sub:#888; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,sans-serif; background:var(--bg); color:var(--text); padding-bottom:80px; }
+  header { background:var(--green-dark); color:#fff; padding:0 16px; height:52px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:100; }
+  header h1 { font-size:1.1rem; }
+  .nav { margin-left:auto; display:flex; gap:8px; }
+  .nav a { color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; font-size:0.9rem; }
+  .container { max-width:900px; margin:20px auto; padding:0 16px; }
+  .summary { display:flex; gap:14px; margin-bottom:24px; }
+  .card { flex:1; background:var(--surface); padding:18px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05); text-align:center; }
+  .card .num { font-size:2.2rem; font-weight:700; }
+  .card.correct .num { color:#27ae60; }
+  .card.wrong .num { color:#c0392b; }
+  .card .label { color:var(--text-sub); font-size:0.85rem; margin-top:4px; }
+  .progress { background:var(--surface); padding:14px 18px; border-radius:8px; margin-bottom:24px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .progress h3 { font-size:0.95rem; margin-bottom:10px; color:var(--green-dark); }
+  .progress-bar { background:#eee; height:18px; border-radius:9px; overflow:hidden; }
+  .progress-bar div { height:100%; background:linear-gradient(90deg, #27ae60, #2d8a5c); }
+  .progress small { color:var(--text-sub); font-size:0.85rem; }
+  table { width:100%; background:var(--surface); border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05); border-collapse:collapse; }
+  th, td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); }
+  th { background:var(--green-dark); color:#fff; font-weight:600; font-size:0.85rem; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .actions { margin-top:24px; }
+  .btn { background:var(--green-btn); color:#fff; padding:10px 18px; border:none; border-radius:6px; cursor:pointer; text-decoration:none; display:inline-block; }
+  .empty { text-align:center; color:var(--text-sub); padding:40px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ラベル統計（人手検証）</h1>
+  <div class="nav">
+    <a href="/">検出</a><a href="/stats">統計</a><a href="/blacklist">除外</a>
+    <a href="/whitelist">許可</a><a href="/settings">設定</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="summary">
+    <div class="card correct"><div class="num">{{ correct }}</div><div class="label">✓ 正解 (correct)</div></div>
+    <div class="card wrong"><div class="num">{{ wrong }}</div><div class="label">✗ 誤検知 (wrong)</div></div>
+    <div class="card"><div class="num">{{ correct + wrong }}</div><div class="label">合計</div></div>
+  </div>
+
+  <div class="progress">
+    <h3>Phase 5-D（カスタム分類器）着手目安：各クラス 500件</h3>
+    {% set goal = 500 %}
+    <div class="progress-bar"><div style="width:{{ ((correct / goal * 100) if correct < goal else 100) }}%"></div></div>
+    <small>正解: {{ correct }} / {{ goal }}</small>
+    <div class="progress-bar" style="margin-top:8px;"><div style="width:{{ ((wrong / goal * 100) if wrong < goal else 100) }}%; background:linear-gradient(90deg, #e74c3c, #c0392b);"></div></div>
+    <small>誤検知: {{ wrong }} / {{ goal }}</small>
+  </div>
+
+  {% if by_species %}
+  <table>
+    <thead><tr><th>英名</th><th>和名</th><th class="num">正解</th><th class="num">誤検知</th></tr></thead>
+    <tbody>
+    {% for s in by_species %}
+      <tr>
+        <td>{{ s.species or "-" }}</td>
+        <td>{{ s.species_jp or "-" }}</td>
+        <td class="num" style="color:#27ae60">{{ s.correct_cnt }}</td>
+        <td class="num" style="color:#c0392b">{{ s.wrong_cnt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">人手検証ラベルがまだありません。検出一覧の「✓ 正解 / ✗ 誤検知」ボタンでラベル付けを開始してください。</div>
+  {% endif %}
+
+  <div class="actions">
+    <a href="/api/labeled/export" class="btn">ラベル付き WAV を ZIP でダウンロード</a>
+  </div>
+</div>
+</body>
+</html>
