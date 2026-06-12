@@ -80,8 +80,12 @@
 ## 8. 移行: N97 → GT105
 
 - 移行先 GT105 は CPU 運用ハブ（Tailscale）。Stage2 が CPU で動くため移行と整合。
-- **前提検証**: AST KD-soup の **CPU 推論 latency を GT105 で実測**（3秒チャンク/件が
-  運用cadence=10分間隔バッチに乗るか）。← 移行・統合の最初のゲート。
+- **前提検証（2026-06-12 実測・合格）**: GT105(CPU 16core/30G) で AST KD-soup 推論を計測:
+  モデルロード0.8s/RSS452MB、**推論 109ms/chunk(16thread, 8.6ch/s)**、前処理(FE+load)611ms/chunk、ピークRSS1.4GB。
+  energyゲート＋複合クラス込みの完全推論を CPU で再現（マガモ→「マガモ/カルガモ」, 非カモ→棄却）。
+  運用cadence(10分バッチ・カモは検出の一部=数chunk)に対し**桁違いの余裕**。→ **移行・デプロイは演算面で問題なし**。
+  ベンチ: `bird-fine-classifier/tools/bench_cpu_inference.py`（CPU venv `.venv-cpu`）。
+- 補足: 前処理(ASTFeatureExtractor)が推論の5倍＝律速。統合時はBirdNETの音声ロードと共有して削れる余地。
 - 既存の移管テンプレ: `~/MIGRATION_minipc_to_gt105.md` / `~/.claude/docs/project-ops.md`。
 
 ## 9. 評価・運用規律
@@ -92,8 +96,8 @@
 
 ## 10. 未実装・残課題
 
-- [ ] **GT105 CPU 推論テスト**（移行・統合の前提ゲート）
-- [ ] **process.py ルーティングフック**＋Stage2 デプロイ
+- [x] **GT105 CPU 推論テスト**（2026-06-12 合格: 109ms/chunk・energyゲート/複合クラス CPU 再現・cadence余裕）
+- [ ] **process.py ルーティングフック**＋Stage2 デプロイ ← **次の本命**（演算面の前提クリア済）
 - [ ] test拡大の再学習(Cv2)評価・昇格判定（進行中）
 - [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠）
 - [ ] data/ood_processed 再生成（陳腐化）
