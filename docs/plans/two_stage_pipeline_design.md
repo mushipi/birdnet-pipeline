@@ -71,11 +71,20 @@
 
 ## 7. 統合（未実装＝本設計の作業）
 
-1. **`process.py` にルーティングフック**: BirdNET 推論後、group==duck の検出に対し
-   同一WAVの該当窓を Stage2 推論 → 種/複合ラベルで DB レコードを上書き（or 補助列追加）。
+1. **`process.py` にルーティングフック**: BirdNET 推論後、group==duck の検出に対し該当窓を Stage2 推論。
+   - **メモリ・ハンドオフ前提**: Stage1 が**デコード済みの波形(numpy)＋検出の時間オフセット**を保持し、
+     Stage2 FE へ**メモリ上でスライス渡し**（ファイル再読込を回避）。CPUベンチの前処理611ms/chunkの
+     大半は `librosa.load`（ファイル読込＋48k→16kリサンプル）。再読込を消せば前処理は **~150-250ms** に。
+     可能なら **BirdNET が叩いた3秒窓をそのまま再利用**（窓の整合）。残コスト＝リサンプル＋mel（不可避）。
 2. **Stage2 のデプロイ**: モデル(`ast-duck-C-kd-soup`)＋`predict.py`＋`species_taxonomy.yaml`を推論機へ。
-   CPU torch/transformers 環境を用意。
-3. **DBスキーマ**: 必要なら `refined_species` / `refined_by` 列を追加（Stage1/Stage2 を区別）。
+   CPU torch/transformers 環境（GT105 `.venv-cpu` 検証済）。
+3. **DBスキーマ（非破壊が必須）**:
+   - **Stage1 の元カラム（species/scientific_name/confidence）は絶対不変**。Stage2 結果は**別カラム追加**:
+     `refined_species` / `refined_label`(表示=マガモ/カルガモ) / `refined_by` / `refined_confidence` /
+     `refined_energy` / **`stage2_model_version`**（モデル更新の追跡）/ `refined_at`。
+   - **原本音声(WAV)を保持**: カモ検出セグメントは削除しない（仕分けで消えない運用）。
+     理由＝(a) BirdNET自身の混同実証に生の鳴き声が要る (b) モデル改善時の Stage2 再実行
+     (c) 人手ラベル監査 (d) ロールバック。
 
 ## 8. 移行: N97 → GT105
 
@@ -93,13 +102,21 @@
 - **録音単位 macro-f1 ＋ 録音クラスタ bootstrap CI**（`analysis/compare_runs_ci.py`）。
   chunk単位点推定で優劣を断定しない。CI が重なる差(≈±0.05)は「差なし」。
 - 弱種の評価解像度（ヒドリ等の小標本）は **test拡大で対応中**（B級worldwide収集→再split→再学習, 進行中）。
+- **OOD閾値のフィールド再キャリブレ（重要・デプロイ後必須）**: 現 2.717 は **Xeno-canto域の暫定値**。
+  実フィールド（パラボラマイク・固定地点・水辺/風/他鳥/機械音）は energy 分布が異なり、誤りの向き
+  （ノイズ→自信↓→真カモ過剰棄却 / 背景音→誤受理）は**現地で測らないと不明**。
+  → デプロイ後、**Pi実録音の energy ＋ 人手ラベル(Phase 5-C の correct/wrong)** で `ood_fp_audit.py` の
+  録音単位手法を**フィールドデータに当てて再導出**。季節（冬鳥飛来期・水位/風）で変動しうるため
+  **固定値でなく監視・調整する tunable** として扱う。Xeno-canto→フィールドのドメインギャップの一断面。
 
 ## 10. 未実装・残課題
 
 - [x] **GT105 CPU 推論テスト**（2026-06-12 合格: 109ms/chunk・energyゲート/複合クラス CPU 再現・cadence余裕）
 - [ ] **process.py ルーティングフック**＋Stage2 デプロイ ← **次の本命**（演算面の前提クリア済）
+  - メモリ・ハンドオフ（波形渡しで前処理短縮）/ DB非破壊（refined_*列＋原本WAV保持）を設計に織込（§7）
 - [ ] test拡大の再学習(Cv2)評価・昇格判定（進行中）
-- [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠）
+- [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠／原本WAV保持が前提）
+- [ ] **OOD閾値のフィールド再キャリブレ**（デプロイ後・人手ラベル蓄積後／季節変動の監視）
 - [ ] data/ood_processed 再生成（陳腐化）
 - [ ] 「カモ科 sp.」低信頼後退（信頼閾値キャリブレ要）
 
