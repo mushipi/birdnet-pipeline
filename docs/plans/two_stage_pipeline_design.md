@@ -1,6 +1,6 @@
 # 全体設計: 2段 野鳥識別パイプライン（BirdNET → カモ10種 Stage2）
 
-最終更新: 2026-06-12 / ステータス: **設計（Stage2は別repoで実装済、統合は未配線）**
+最終更新: 2026-06-13 / ステータス: **ルーティングフック実装済(GT105でE2E検証, settings既定disabled)・本番デプロイ未**
 
 このドキュメントは BirdProject（運用本体）と bird-fine-classifier（カモ細分類 Stage2）を横断した
 **システム全体設計**。Phase 5-E（`future_model_improvements.md`）の「ステージング(Cascading)」を
@@ -112,9 +112,16 @@
 ## 10. 未実装・残課題
 
 - [x] **GT105 CPU 推論テスト**（2026-06-12 合格: 109ms/chunk・energyゲート/複合クラス CPU 再現・cadence余裕）
-- [ ] **process.py ルーティングフック**＋Stage2 デプロイ ← **次の本命**（演算面の前提クリア済）
-  - メモリ・ハンドオフ（波形渡しで前処理短縮）/ DB非破壊（refined_*列＋原本WAV保持）を設計に織込（§7）
-- [ ] test拡大の再学習(Cv2)評価・昇格判定（進行中）
+- [x] **process.py ルーティングフック**（2026-06-13 実装・GT105でE2E検証, commit 553ae1b）
+  - **group 汎用 dispatcher**: `species_taxonomy.yaml` で stage2_model 設定済の群(現 duck/将来 crow/gull)を
+    `species_master` の status(target/ood_tier1)で {種→群} に解決。新群は taxonomy に stage2_model を埋めれば自動有効化。
+  - **subprocess 隔離**: BirdProject(birdnetlib/TF)から bird-fine `predict.py --json` を別venv(.venv-cpu)で実行＝依存衝突回避。
+  - **DB非破壊**: `refined_*`列(species/label/sci/confidence/energy/status/stage2_model_version/group/at)を ALTER 追加、
+    Stage1列(species/confidence)不変。`db.set_refined()`。原本WAVは既存の detected/ への move で保持済。
+  - 既定 `settings.stage2.enabled=false`＝完全 no-op。新規 `stage2_refine.py`。検証: マガモ→複合通過/非カモ→OOD棄却/crow自動除外。
+- [ ] **Stage2 デプロイ**（N97 本番 or N97→GT105 移行）: enabled 化＋両 repo＋モデル(D-base-soup)配布＋cron 確認 ← 次の本命
+- [ ] **in-memory 波形ハンドオフ**（§7-1, 前処理短縮の最適化。現状は原本再読込）/ 窓バッチ化（モデルロード償却）
+- [x] test拡大の再学習(Cv2)評価・昇格判定（2026-06-13 完了: リーク発覚→honest再評価で `ast-duck-D-base-soup` 昇格・閾値3.081）
 - [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠／原本WAV保持が前提）
 - [ ] **OOD閾値のフィールド再キャリブレ**（デプロイ後・人手ラベル蓄積後／季節変動の監視）
 - [ ] data/ood_processed 再生成（陳腐化）
