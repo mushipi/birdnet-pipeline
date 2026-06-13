@@ -12,6 +12,13 @@
   "ebird_api_key": "<EBIRD_API_KEY>",
   "ebird_region_code": "JP-40",
   "species_list_file": "ebird_species_list.txt",
+  "stage2": {
+    "enabled": false,
+    "bfc_dir": "~/bird-fine-classifier",
+    "venv_python": ".venv-cpu/bin/python",
+    "species_master": "data/species_master.csv",
+    "timeout_sec": 60
+  },
   "pi_devices": {
     "<PI_ID>": {
       "host": "mushipi@<TAILSCALE_IP>",

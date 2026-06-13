@@ -19,6 +19,7 @@ from birdnetlib import Recording
 from birdnetlib.analyzer import Analyzer
 
 import db
+import stage2_refine
 
 BASE_DIR = Path(__file__).parent
 
@@ -30,6 +31,11 @@ _settings = _load_settings()
 PROCESSED_DIR = Path(_settings.get("processed_dir", BASE_DIR / "processed"))
 RAW_INGEST_DIR = Path(_settings.get("raw_ingest_dir", BASE_DIR / "raw_ingest"))
 SPECIES_LIST_FILE = _settings.get("species_list_file")  # オプション。eBird 由来のホワイトリスト
+
+# Stage2 統合（既定 disabled = 完全 no-op。明示有効化までは従来挙動を保つ）
+_STAGE2_CFG = _settings.get("stage2", {}) or {}
+_STAGE2_ENABLED = bool(_STAGE2_CFG.get("enabled"))
+_DISPATCH_MAP: dict[str, str] = {}  # {BirdNET種名: group}。process_all 起動時に構築
 
 CONF_HIGH = 0.65  # confirmed として記録する確信度下限
 CONF_LOW = 0.25   # birdnetlib の min_conf に渡す値（これ未満は API 側でフィルタ）
@@ -231,6 +237,12 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
     db.init_db()
     species_cache = load_species_cache()
 
+    global _DISPATCH_MAP
+    if _STAGE2_ENABLED:
+        _DISPATCH_MAP = stage2_refine.load_dispatch_map(_STAGE2_CFG)
+        groups = sorted(set(_DISPATCH_MAP.values()))
+        print(f"  [stage2] 有効: トリガ {len(_DISPATCH_MAP)} 種 / 群 {groups or '(なし)'}")
+
     for wav_path in wav_files:
         if not wav_path.exists():
             print(f"\n[skip] {wav_path.name} は既に処理済み（別プロセスが先行）")
@@ -258,7 +270,7 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
                 common_name = det["common_name"]
                 jp_name = species_cache.get(common_name, {}).get("species_jp")
                 
-                db.insert_detection(
+                rid = db.insert_detection(
                     timestamp=ts.isoformat(),
                     file_path=str(dest_path),
                     species=common_name,
@@ -271,6 +283,17 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
                     species_jp=jp_name,
                     det_count=det.get("det_count"),
                 )
+
+                # Stage2: 専門分類器のある群(duck 等)なら同一窓を再分類し refined_* に追記（非破壊）
+                group = _DISPATCH_MAP.get(common_name) if _STAGE2_ENABLED else None
+                if group:
+                    res = stage2_refine.refine_detection(
+                        str(dest_path), det.get("start_time"), det.get("end_time"), group, _STAGE2_CFG)
+                    if res:
+                        db.set_refined(rid, **stage2_refine.refined_fields(res))
+                        rf = res.get("top") or {}
+                        tag = rf.get("label") if not res.get("ood_rejected") else "OOD棄却"
+                        print(f"    [stage2/{group}] {common_name} → {tag} (energy {res.get('energy_score')})")
                 print(f"  [confirmed] {jp_name or common_name} ({det['confidence']:.2f}) x{det.get('det_count', 1)}")
 
 

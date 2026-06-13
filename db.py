@@ -66,6 +66,47 @@ def _migrate_db() -> None:
             )
         if "human_labeled_at" not in cols:
             conn.execute("ALTER TABLE detections ADD COLUMN human_labeled_at TEXT")
+        # Stage2 統合: 専門分類器(カモ10種等)による再分類結果を非破壊で追記。
+        #   Stage1 の species/scientific_name/confidence は不変。refined_* は別系統。
+        for col, ddl in [
+            ("refined_species", "TEXT"),        # Stage2 内部クラス(en, 例 Mallard)。OOD棄却時 NULL
+            ("refined_label", "TEXT"),          # 表示ラベル(複合含む, 例 マガモ/カルガモ)
+            ("refined_sci", "TEXT"),            # 学名(複合は slash, 例 Anas platyrhynchos/zonorhyncha)
+            ("refined_confidence", "REAL"),     # Stage2 top1 確率
+            ("refined_energy", "REAL"),         # OOD energy スコア(録音平均)
+            ("refined_status", "TEXT"),         # 'refined' / 'ood_rejected'
+            ("stage2_model_version", "TEXT"),   # 例 ast-duck-D-base-soup(モデル更新追跡)
+            ("refined_group", "TEXT"),          # ディスパッチ群(duck/crow/gull…)
+            ("refined_at", "TEXT"),
+        ]:
+            if col not in cols:
+                conn.execute(f"ALTER TABLE detections ADD COLUMN {col} {ddl}")
+
+
+def set_refined(
+    detection_id: int,
+    *,
+    refined_species: str | None,
+    refined_label: str | None,
+    refined_sci: str | None,
+    refined_confidence: float | None,
+    refined_energy: float | None,
+    refined_status: str,
+    stage2_model_version: str | None,
+    refined_group: str | None,
+) -> None:
+    """Stage2 再分類結果を該当 detection 行に追記（Stage1 列は触らない）。"""
+    from datetime import datetime, timezone, timedelta
+    JST = timezone(timedelta(hours=9))
+    ts = datetime.now(JST).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE detections SET refined_species=?, refined_label=?, refined_sci=?, "
+            "refined_confidence=?, refined_energy=?, refined_status=?, "
+            "stage2_model_version=?, refined_group=?, refined_at=? WHERE id=?",
+            (refined_species, refined_label, refined_sci, refined_confidence, refined_energy,
+             refined_status, stage2_model_version, refined_group, ts, detection_id),
+        )
 
 
 def set_human_label(detection_id: int, label: str | None) -> None:
