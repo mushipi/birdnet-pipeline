@@ -1,22 +1,33 @@
 # BirdProject
 
-Raspberry Pi で野鳥の鳴き声を継続録音し、N97 サーバー上で BirdNET により自動種判定を行い、Web UI で観察記録として管理するシステム。
+Raspberry Pi で野鳥の鳴き声を継続録音し、推論機（現 N97 / 移行先 GT105）で **2段パイプライン**
+（BirdNET 汎用検出 → 群専用 Stage2 細分類）により自動種判定を行い、Web UI で観察記録として管理するシステム。
 
 ## システム概要
 
 ```
 [Raspberry Pi]  録音（arecord, 60秒セグメント）
       ↓ rsync（Tailscale VPN, 10分ごと）
-[N97 サーバー]  推論（BirdNET_GLOBAL_6K_V2.4）→ SQLite DB
+[推論機: 現N97 → 移行先GT105]  process.py（cron 10分）
+   ├ Stage1: BirdNET_GLOBAL_6K_V2.4 で汎用検出
+   ├ Dispatcher: 検出種の group を判定（species_master）
+   │     └ group∈{duck, crow, …}（taxonomy 登録済）なら Stage2 へ
+   ├ Stage2: 群専用 AST（多seed soup）で同一3秒窓を再分類 → 種/複合に上書き＋OOD棄却
+   └ SQLite DB（Stage1列は不変・refined_* 追加・原本WAV保持）
       ↓
-[Web UI]        http://<N97_TAILSCALE_IP>:8765
+[Web UI]        http://<推論機_TAILSCALE_IP>:8765
 ```
+
+- **2段の全体設計** → [`docs/plans/two_stage_pipeline_design.md`](docs/plans/two_stage_pipeline_design.md)。
+  Stage2 ルーティングフックは実装済（`stage2_refine.py`, 群汎用 dispatcher, 既定 `settings.stage2.enabled=false`）。
+  Stage2 細分類器の開発は別repo [`bird-fine-classifier`](../bird-fine-classifier)（duck 運用中・crow 構築中）。
 
 ## ネットワーク構成
 
 | ホスト | Tailscale IP | 役割 |
 |--------|-------------|------|
-| mushipiubuntuserver (N97) | <N97_TAILSCALE_IP> | 推論・DB・Web |
+| mushipiubuntuserver (N97) | <N97_TAILSCALE_IP> | 推論・DB・Web（現運用） |
+| mushipi-GT105 | <GT105_TAILSCALE_IP> | 推論・DB・Web（移行先, CPU運用ハブ。Stage2 CPU推論検証済） |
 | mushipi-bird01 (Pi) | <PI_TAILSCALE_IP> | 録音・転送 |
 
 ## セットアップ
@@ -89,7 +100,8 @@ chmod 600 mail_config.json
 
 | ファイル | 内容 |
 |---------|------|
-| `DESIGN.md` | システム全体設計（ハードウェア・API・DB スキーマ） |
+| `DESIGN.md` | システム全体設計（ハードウェア・API・DB スキーマ, 現行単段の運用基盤） |
+| `docs/plans/two_stage_pipeline_design.md` | **2段パイプライン全体設計**（BirdNET→群専用Stage2, dispatcher/統合/移行） |
 | `DEVLOG.md` | 開発記録・技術的決定事項（時系列） |
 | `docs/README.md` | ドキュメント目次・追加ルール |
 | `docs/hardware/parabolic_mic.md` | 自作パラボリックマイク設計書 |
