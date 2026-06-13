@@ -162,6 +162,16 @@ flowchart TD
 - [ ] **Stage2 デプロイ**（N97 本番 or N97→GT105 移行）: enabled 化＋両 repo＋モデル(D-base-soup)配布＋cron 確認 ← 次の本命
 - [ ] **crow 群の end-to-end 実証**（標準フロー§5.5の検証）: Lean vs Full判定→混同/複合→OOD→taxonomy登録（`crow.pipeline`）。
       2群目を通すことで「群追加フローが再現可能」を確定し、Skill化（知識=playbook＋実行=build_group.sh）へ。
+- [ ] **【構造リファクタ】Stage2 推論ランタイムの帰属見直し**（crow 一段落後）: 現状 `predict.py`＋`species_taxonomy.yaml`
+      ＋`.venv-cpu` が研究repo(bird-fine-classifier)に同居し、**運用システム1つの稼働に 2チェックアウト・2venv・subprocess越境**を要する
+      ＝運用面の二重化。問題の継ぎ目は「研究 vs 運用」でなく、**運用コンポーネント(#2)が研究repoに越境**していること。
+  - **関心事3分割**: ①Stage2 訓練/研究（bird-fine-classifier に純化＝モデル生産工場）／②Stage2 推論ランタイム（運用=BirdProject へ移送）／
+    ③契約 = taxonomy・species_master（研究が産み運用が食う共有）。
+  - **移送可能性 確認済**: `predict.py` は内部 `bird_fine.*` モジュール非依存の自己完結（13KB, 依存=torch/transformers/librosa/pandas/yaml のみ）。
+    → BirdProject へ移し、subprocess隔離(別venv)は repo 内でも維持できる。**運用＝1repo・1チェックアウト・1sync に集約**。
+  - **全マージはしない**: 6.4Gの研究ツリー＋実験チャーン履歴をリーンな運用repo(2.2M)に流し込まない／birdnetlib・TF × torch の依存境界を溶かさない。
+  - **未決定**: 契約ファイルの所有権移動方式（運用repoが正本＋研究は登録時に昇格／git submodule／デプロイ時 vendoring のどれか）。
+  - **注意**: 直近実装の統合フック（`stage2_refine.py` subprocess, commit 553ae1b）を repo 内呼び出しへ作り替えることになる。crow の end-to-end を優先し、その後に着手。
 - [ ] **in-memory 波形ハンドオフ**（§7-1, 前処理短縮の最適化。現状は原本再読込）/ 窓バッチ化（モデルロード償却）
 - [x] test拡大の再学習(Cv2)評価・昇格判定（2026-06-13 完了: リーク発覚→honest再評価で `ast-duck-D-base-soup` 昇格・閾値3.081）
 - [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠／原本WAV保持が前提）
