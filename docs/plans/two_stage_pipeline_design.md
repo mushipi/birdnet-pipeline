@@ -1,10 +1,13 @@
-# 全体設計: 2段 野鳥識別パイプライン（BirdNET → カモ10種 Stage2）
+# 全体設計: 2段 野鳥識別パイプライン（BirdNET → 群専用 Stage2 細分類）
 
 最終更新: 2026-06-13 / ステータス: **ルーティングフック実装済(GT105でE2E検証, settings既定disabled)・本番デプロイ未**
+／ **群汎用基盤**: duck=運用モデル完成・crow=Phase1.5進行中・gull=予定。
 
-このドキュメントは BirdProject（運用本体）と bird-fine-classifier（カモ細分類 Stage2）を横断した
+このドキュメントは BirdProject（運用本体）と bird-fine-classifier（群専用 Stage2 細分類）を横断した
 **システム全体設計**。Phase 5-E（`future_model_improvements.md`）の「ステージング(Cascading)」を
-カモ類で具現化したもの。具体の Stage2 設計が文書化されていなかったため、ここに集約する。
+具現化したもの。当初はカモ類で立ち上げたが、**dispatcher・訓練・推論すべて群汎用**に組んであり、
+**新しい分類群（crow / gull …）は「標準作成フロー」（§5.5）に沿ってモデルを作り taxonomy に登録すれば
+配線される**。具体の Stage2 設計が文書化されていなかったため、ここに集約する。
 
 ---
 
@@ -12,23 +15,35 @@
 
 - 運用中の BirdNET_GLOBAL_6K_V2.4（汎用6千種 CNN）は、**近縁カモの細分類が不正確**
   （特にカルガモ↔マガモは交雑するほど近縁で**音響的に分離不能**＝Perch本体でも0/30で実証済）。
-- 解: **2段化**。BirdNET（汎用検出 Stage1）→ 検出種が「カモ類」なら **専門 Stage2（10種）** で精緻化。
-- Stage2 = `bird-fine-classifier`（mushipi-pc で開発、KD蒸留で完成）。
+- 解: **2段化**。BirdNET（汎用検出 Stage1）→ 検出種が登録群（カモ等）なら **群専用 Stage2** で精緻化。
+- Stage2 = `bird-fine-classifier`（mushipi-pc で開発）。運用モデルは **多seed soup**、
+  KD（Perch蒸留）は弱い生徒・低データで効く**条件付き手法**（duck運用版は最終的に蒸留なしBASE soupが昇格＝§5）。
 
 ## 2. システム全体構成
 
+```mermaid
+flowchart TD
+    Pi["🎙 Pi mushipi-bird01<br/>arecord 60秒WAV"] -->|"rsync 10分 / Tailscale"| ING
+
+    subgraph INFER["推論機: 現N97 → 移行先GT105 (CPU)"]
+        ING["ingest_and_process.sh<br/>cron 10分 → process.py"] --> S1
+        S1["<b>Stage1: BirdNET_GLOBAL_6K_V2.4</b><br/>汎用検出 (CONF_HIGH=0.65)"] --> DISP
+        DISP{"<b>Dispatcher</b><br/>検出種の group?<br/>(species_master.csv)"}
+        DISP -->|"group∈{duck, crow, …}<br/>status=target/ood_tier1"| S2
+        DISP -->|"その他の種"| DB
+        S2["<b>Stage2: 群専用 AST (多seed soup)</b><br/>同一3秒窓を再分類<br/>群ごとに stage2_model 切替"] --> GATE
+        GATE{"OOD energy ゲート<br/>録音平均 energy ≥ 閾値?"}
+        GATE -->|"真群: 通過"| REF["種 or 複合(slash)に上書き"]
+        GATE -->|"非対象(BirdNET誤検出): 棄却"| DB
+        REF --> DB[("SQLite bird_calls.db<br/>Stage1列は不変 + refined_* 追加<br/>原本WAV保持")]
+    end
+
+    DB --> WEB["🌐 Web UI :8765<br/>一覧 / 統計 / 設定 / export"]
 ```
-[Pi mushipi-bird01]  arecord 60秒WAV → rsync(10分, Tailscale)
-        ↓
-[推論機: 現N97 / 移行先GT105]  ingest_and_process.sh(cron10分) → process.py
-     ├ Stage1: sox/ノイズ除去 → birdnetlib(BirdNET_GLOBAL_6K) 推論
-     ├ Dispatcher: 検出種の group を species_master で判定
-     │     └ group==duck → Stage2 へ（それ以外は従来通り）
-     ├ Stage2: カモ10種 AST(KD-soup) で同一3秒窓を再分類 → 種 or 複合に上書き
-     └ db.py SQLite(bird_calls.db)
-        ↓
-[Web UI :8765]  一覧/統計/設定/export
-```
+
+- **群汎用**: Dispatcher / Stage2 / DB は群非依存。duck・crow・gull は同じ経路を `stage2_model` と
+  `energy_threshold` だけ替えて通る（§4・§5.5）。図の `{duck, crow, …}` は `species_taxonomy.yaml` に
+  登録された群が自動で入る。
 
 ## 3. Stage1: BirdNET（現行・実装済）
 
@@ -47,19 +62,44 @@
     display_groups: { Mallard: {label: "マガモ/カルガモ", ...} }
   ```
 - **`species_master.csv`**: 種 → group / status（target / ood_tier*）。
-- ルーティング規約: BirdNET 検出種の group が `duck`（status=target/ood）なら、その音声窓を Stage2 へ。
+- ルーティング規約: BirdNET 検出種の group が **stage2_model 設定済の群**（現 `duck`、追加され次第 `crow`/`gull`、
+  status=target/ood_tier1）なら、その音声窓を該当群の Stage2 へ。**新群は taxonomy に1行足すだけで有効化**（コード改修不要）。
 
-## 5. Stage2: カモ10種分類器（別repo・実装済）
+## 5. Stage2 第1実装: カモ10種分類器（別repo・運用中）
 
-- **運用モデル**: `models/ast-duck-C-kd-soup`（Perch→KD蒸留 3seed soup）。test 録音単位 macro-f1 **0.871**。
+- **運用モデル**: `models/ast-duck-D-base-soup`（多seed BASE soup）。**honest 録音単位 macro-f1 0.897**。
+  - 経緯: 旧 `ast-duck-C-kd-soup`(0.871) はリーク込み評価が膨張していた。test拡大＋クリーンsplitで honest 再評価した結果、
+    **効いたのはデータ拡大であり蒸留ではない**（天井近いAST最終soupにKDは乗らず, clean では BASE>KD が有意）→ BASE soup を昇格。
 - **対象10種**: マガモ/コガモ/オナガガモ/ハシビロガモ/ヒドリガモ/オカヨシガモ/キンクロハジロ/ホシハジロ/ホオジロガモ/ウミアイサ。
 - **3秒固定チャンク**: BirdNET の3s窓に整合（運用制約）。
-- **OOD energy ゲート**: `predict.py` が録音平均 energy で判定。閾値 **2.717**（録音単位再キャリブレ, 真カモ保持0.90）。
+- **OOD energy ゲート**: `predict.py` が録音平均 energy で判定。閾値 **3.081**（D-base-soup で再導出, 真カモ保持0.90）。
   非カモ（BirdNET誤検出）を棄却。対象外カモ類の漏れは複合/分類側で受容。
+  ⚠**モデルを替えたら必ず再導出**（energy分布がシフト。旧2.717は新モデルだと非カモFP0.88でゲート無効化）。
 - **複合クラス出力（適応的解像度）**: 音響的に割れないペアは複合(slash)で出す。
   - 種（既定）: 分離できる8種。
   - 複合: **マガモ/カルガモ**（カルガモはモデル上Mallardに化ける＝relabelで誠実、最頻種を捨てない）。
   - カモ科 sp.（種不明, 低信頼後退・**未実装**）/ 非カモ（棄却）。
+
+## 5.5 群の追加: 標準作成フロー（duck → crow → gull）
+
+新しい分類群の Stage2 を作る手順は **標準化済み**。duck で確立し crow で再演している。
+
+- **判断則の本体（生きた文書）**: `bird-fine-classifier/docs/group_classifier_playbook.md`
+  （9節＋追記ログ。データ収集の薄種対応／grade緩和の是非／評価規律=録音単位CI・リーク厳禁／複合化＝実測してから／OOD動作点）。
+- **実行（段階型ドライバ）**: `bird-fine-classifier/scripts/build_group.sh <stage> --config config-<group>.yaml`
+  - 8段: `data`(収集) → `prep`(前処理+split) → `embed`(Perch+教師proba) → `train --arm lean|kd`(多seed→soup)
+    → `eval`(録音単位CI) → `ood`(閾値) → `confusion`(複合判断) → `register`(taxonomy追記スニペット)。
+  - 群固有値は config から導出。**判断点ではドライバは止まって情報を出すだけ**（自動化しない＝上の判断則を守る）。
+- **雛形**: `config-template.yaml`（差替箇所を `[TODO]` 化）。
+- **配線（本設計との接続）**: 完成した群モデルを `species_taxonomy.yaml` に
+  `<group>.pipeline.{stage2_model, energy_threshold, energy_temperature}`（複合あれば `display_groups`）として登録
+  → §4 Dispatcher が群汎用なので **process.py 無改修で dispatch 対象入り**（§10 のルーティングフック実装済）。
+
+**各群の状態**:
+- **duck** ✅運用モデル完成（`ast-duck-D-base-soup`, OOD 3.081, 複合=マガモ/カルガモ）。BirdProject 統合済（settings既定 disabled）。
+- **crow** 🔬Phase1.5: 4種（ハシブト/ハシボソ/ミヤマ/カササギ）収集済・grade=A+B確定。
+  Lean vs Full(KD) を 2026-06-13 夜間に自動学習中→CI で KD是非判定。以後 混同/複合・OOD・登録（§5-7相当）を実走して end-to-end 実証予定。
+- **gull** ⬜未着手（同フローで展開）。
 
 ## 6. 蒸留と CPU デプロイ（移行の鍵）
 
@@ -76,7 +116,7 @@
      Stage2 FE へ**メモリ上でスライス渡し**（ファイル再読込を回避）。CPUベンチの前処理611ms/chunkの
      大半は `librosa.load`（ファイル読込＋48k→16kリサンプル）。再読込を消せば前処理は **~150-250ms** に。
      可能なら **BirdNET が叩いた3秒窓をそのまま再利用**（窓の整合）。残コスト＝リサンプル＋mel（不可避）。
-2. **Stage2 のデプロイ**: モデル(`ast-duck-C-kd-soup`)＋`predict.py`＋`species_taxonomy.yaml`を推論機へ。
+2. **Stage2 のデプロイ**: モデル(`ast-duck-D-base-soup`)＋`predict.py`＋`species_taxonomy.yaml`を推論機へ。
    CPU torch/transformers 環境（GT105 `.venv-cpu` 検証済）。
 3. **DBスキーマ（非破壊が必須）**:
    - **Stage1 の元カラム（species/scientific_name/confidence）は絶対不変**。Stage2 結果は**別カラム追加**:
@@ -102,7 +142,7 @@
 - **録音単位 macro-f1 ＋ 録音クラスタ bootstrap CI**（`analysis/compare_runs_ci.py`）。
   chunk単位点推定で優劣を断定しない。CI が重なる差(≈±0.05)は「差なし」。
 - 弱種の評価解像度（ヒドリ等の小標本）は **test拡大で対応中**（B級worldwide収集→再split→再学習, 進行中）。
-- **OOD閾値のフィールド再キャリブレ（重要・デプロイ後必須）**: 現 2.717 は **Xeno-canto域の暫定値**。
+- **OOD閾値のフィールド再キャリブレ（重要・デプロイ後必須）**: 現 3.081 は **Xeno-canto域の暫定値**。
   実フィールド（パラボラマイク・固定地点・水辺/風/他鳥/機械音）は energy 分布が異なり、誤りの向き
   （ノイズ→自信↓→真カモ過剰棄却 / 背景音→誤受理）は**現地で測らないと不明**。
   → デプロイ後、**Pi実録音の energy ＋ 人手ラベル(Phase 5-C の correct/wrong)** で `ood_fp_audit.py` の
@@ -120,6 +160,8 @@
     Stage1列(species/confidence)不変。`db.set_refined()`。原本WAVは既存の detected/ への move で保持済。
   - 既定 `settings.stage2.enabled=false`＝完全 no-op。新規 `stage2_refine.py`。検証: マガモ→複合通過/非カモ→OOD棄却/crow自動除外。
 - [ ] **Stage2 デプロイ**（N97 本番 or N97→GT105 移行）: enabled 化＋両 repo＋モデル(D-base-soup)配布＋cron 確認 ← 次の本命
+- [ ] **crow 群の end-to-end 実証**（標準フロー§5.5の検証）: Lean vs Full判定→混同/複合→OOD→taxonomy登録（`crow.pipeline`）。
+      2群目を通すことで「群追加フローが再現可能」を確定し、Skill化（知識=playbook＋実行=build_group.sh）へ。
 - [ ] **in-memory 波形ハンドオフ**（§7-1, 前処理短縮の最適化。現状は原本再読込）/ 窓バッチ化（モデルロード償却）
 - [x] test拡大の再学習(Cv2)評価・昇格判定（2026-06-13 完了: リーク発覚→honest再評価で `ast-duck-D-base-soup` 昇格・閾値3.081）
 - [ ] BirdNET 自身のカルガモ/マガモ混同の実証（複合化の運用適用根拠／原本WAV保持が前提）
