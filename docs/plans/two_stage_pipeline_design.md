@@ -1,13 +1,19 @@
 # 全体設計: 2段 野鳥識別パイプライン（BirdNET → 群専用 Stage2 細分類）
 
-最終更新: 2026-06-13 / ステータス: **ルーティングフック実装済(GT105でE2E検証, settings既定disabled)・本番デプロイ未**
-／ **群汎用基盤**: duck=運用モデル完成・crow=Phase1.5進行中・gull=予定。
+最終更新: 2026-06-14 / ステータス: **ルーティングフック実装済(GT105でE2E検証, settings既定disabled)・本番デプロイ未**
+／ **群汎用基盤**: duck=運用モデル完成・**crow=Stage2完成+taxonomy登録済(配線のみ未)**・gull=予定。
 
 このドキュメントは BirdProject（運用本体）と bird-fine-classifier（群専用 Stage2 細分類）を横断した
-**システム全体設計**。Phase 5-E（`future_model_improvements.md`）の「ステージング(Cascading)」を
-具現化したもの。当初はカモ類で立ち上げたが、**dispatcher・訓練・推論すべて群汎用**に組んであり、
-**新しい分類群（crow / gull …）は「標準作成フロー」（§5.5）に沿ってモデルを作り taxonomy に登録すれば
-配線される**。具体の Stage2 設計が文書化されていなかったため、ここに集約する。
+**システム全体設計＝この1本でパイプラインを通せる正典**。Phase 5-E（`future_model_improvements.md`）の
+「ステージング(Cascading)」を具現化したもの。当初はカモ類で立ち上げたが、**dispatcher・訓練・推論すべて群汎用**に
+組んであり、**新しい分類群（crow / gull …）は「標準作成フロー」（§5.5）に沿ってモデルを作り taxonomy に
+登録すれば配線される**。
+
+> **📄 文書の役割分担（迷ったらここ）**
+> - **本書（two_stage_pipeline_design.md）＝正典**: 全体像・ランタイム2段・Dispatcher・統合配線・運用規律。「何がどう繋がって動くか」。
+> - **`bird-fine-classifier/docs/group_classifier_playbook.md`＝build詳細**: 新群を0から作る判断則＋`build_group.sh` 各段の手順（§5.5 が参照）。
+> - **`bird-fine-classifier/docs/architecture.md`＝Stage2内部リファレンス**: AST構造・Energy Gate式・species_master設計・学習設定。
+> - **`DESIGN.md`（BirdProject）＝取得基盤**: Pi録音・process.py・DBスキーマ・API（Stage2とは別関心事）。
 
 ---
 
@@ -97,9 +103,12 @@ flowchart TD
 
 **各群の状態**:
 - **duck** ✅運用モデル完成（`ast-duck-D-base-soup`, OOD 3.081, 複合=マガモ/カルガモ）。BirdProject 統合済（settings既定 disabled）。
-- **crow** 🔬Phase1.5: 4種（ハシブト/ハシボソ/ミヤマ/カササギ）収集済・grade=A+B確定。
-  Lean vs Full(KD) を 2026-06-13 夜間に自動学習中→CI で KD是非判定。以後 混同/複合・OOD・登録（§5-7相当）を実走して end-to-end 実証予定。
-- **gull** ⬜未着手（同フローで展開）。
+- **crow** ✅**Stage2完成+taxonomy登録済（2026-06-14, 配線のみ未）**: 4種（ハシブト/ハシボソ/ミヤマ/カササギ, grade A+B）。
+  - 標準フロー(§5.5)を end-to-end 実走＝**2群目の通し実証**。`stage2_model=ast-crow-AB-lean-soup`, `energy_threshold=2.610`。
+  - 判断結果: **KD効果ゼロ→lean soup採用**(録音f1≈0.88)／**grade緩和不要**(分離容易)／**複合不要**(音響的に割れる種ペア無し=4種そのまま, カモのカルガモ壁と別物)。
+  - OOD: 録音AUROC 在群vs同科Corvidae 0.906、**同属Corvus(ワタリガラス等)でも崩壊せず=crow壁無し**。閾値はXC域暫定→deploy後field再キャリブレ。
+  - 残=BirdProject側の配線(§7・duckと同じ settings既定disabledパターン)。
+- **gull** ⬜未着手（同フローで展開。OOD収集/監査も群対応済＝config作成→`build_group.sh`を流すだけ）。
 
 ## 6. 蒸留と CPU デプロイ（移行の鍵）
 
@@ -160,8 +169,9 @@ flowchart TD
     Stage1列(species/confidence)不変。`db.set_refined()`。原本WAVは既存の detected/ への move で保持済。
   - 既定 `settings.stage2.enabled=false`＝完全 no-op。新規 `stage2_refine.py`。検証: マガモ→複合通過/非カモ→OOD棄却/crow自動除外。
 - [ ] **Stage2 デプロイ**（N97 本番 or N97→GT105 移行）: enabled 化＋両 repo＋モデル(D-base-soup)配布＋cron 確認 ← 次の本命
-- [ ] **crow 群の end-to-end 実証**（標準フロー§5.5の検証）: Lean vs Full判定→混同/複合→OOD→taxonomy登録（`crow.pipeline`）。
-      2群目を通すことで「群追加フローが再現可能」を確定し、Skill化（知識=playbook＋実行=build_group.sh）へ。
+- [x] **crow 群の end-to-end 実証**（標準フロー§5.5）2026-06-14完了: KD差なし→lean soup／grade緩和不要／複合不要／
+      OOD energy閾値2.610(crow壁無し)→`crow.pipeline`登録＋predict検証。**「群追加フローは再現可能」確定**（OOD収集/監査も多群化済）。
+      残=BirdProject側の配線(本§10の「Stage2デプロイ」でcrowもenabled対象に)／Skill化（知識=playbook＋実行=build_group.sh）。
 - [ ] **【構造リファクタ】Stage2 推論ランタイムの帰属見直し**（crow 一段落後）: 現状 `predict.py`＋`species_taxonomy.yaml`
       ＋`.venv-cpu` が研究repo(bird-fine-classifier)に同居し、**運用システム1つの稼働に 2チェックアウト・2venv・subprocess越境**を要する
       ＝運用面の二重化。問題の継ぎ目は「研究 vs 運用」でなく、**運用コンポーネント(#2)が研究repoに越境**していること。
