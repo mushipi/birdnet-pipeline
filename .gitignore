@@ -22,4 +22,5 @@ blacklist_hits.log
 *.zip
 labeled_dataset.zip
 ebird_species_list.txt
+models/
 .DS_Store

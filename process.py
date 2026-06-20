@@ -31,6 +31,9 @@ _settings = _load_settings()
 PROCESSED_DIR = Path(_settings.get("processed_dir", BASE_DIR / "processed"))
 RAW_INGEST_DIR = Path(_settings.get("raw_ingest_dir", BASE_DIR / "raw_ingest"))
 SPECIES_LIST_FILE = _settings.get("species_list_file")  # オプション。eBird 由来のホワイトリスト
+# Stage1 モデル選択（未設定なら素の BirdNET_GLOBAL_6K_V2.4、設定すれば mainPC 追加学習のカスタム分類器）
+BIRDNET_MODEL_PATH = _settings.get("birdnet_model_path")
+BIRDNET_LABELS_PATH = _settings.get("birdnet_labels_path")
 
 # Stage2 統合（既定 disabled = 完全 no-op。明示有効化までは従来挙動を保つ）
 _STAGE2_CFG = _settings.get("stage2", {}) or {}
@@ -63,6 +66,26 @@ def _load_species_list() -> list[str] | None:
 
 
 _SPECIES_LIST = _load_species_list()
+
+
+def build_analyzer() -> Analyzer:
+    """Stage1 の Analyzer を生成する。
+
+    settings.json に birdnet_model_path / birdnet_labels_path が両方あれば
+    mainPC で追加学習したカスタム分類器を、無ければ素の BirdNET_GLOBAL_6K_V2.4 をロードする。
+    （カスタム配備は設定 1 行の差し替えで完結し、未配備時は従来挙動＝完全非破壊）
+    """
+    if BIRDNET_MODEL_PATH and BIRDNET_LABELS_PATH:
+        model = Path(BIRDNET_MODEL_PATH).expanduser()
+        labels = Path(BIRDNET_LABELS_PATH).expanduser()
+        if not model.exists() or not labels.exists():
+            raise FileNotFoundError(
+                f"カスタム分類器が見つからないわ: model={model} labels={labels}"
+            )
+        print(f"  カスタム分類器をロード: {model.name} / {labels.name}")
+        return Analyzer(classifier_model_path=str(model), classifier_labels_path=str(labels))
+    print("  素の BirdNET_GLOBAL_6K_V2.4 をロード")
+    return Analyzer()
 
 
 def _load_blacklist() -> set[str]:
@@ -229,7 +252,7 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
         return
 
     print(f"Analyzer をロード中... (pi_id={pi_id}, noise_reduction={nr_mode})")
-    analyzer = Analyzer()
+    analyzer = build_analyzer()
     if _SPECIES_LIST:
         # eBird 由来などのホワイトリストを Analyzer に登録（地域・季節フィルタを補強）
         analyzer.custom_species_list = _SPECIES_LIST
