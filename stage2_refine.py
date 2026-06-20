@@ -46,8 +46,10 @@ def _active_groups(bfc: Path, venv_py: Path) -> set[str]:
 
 
 def load_dispatch_map(cfg: dict) -> dict[str, str]:
-    """{BirdNET種名(en_birdnet): group}。stage2_model 設定済の群 × status(target/ood_tier1) のみ。
+    """{学名(sci): group}。stage2_model 設定済の群 × status(target/ood_tier1) のみ。
 
+    キーは学名(sci)。素 6K でもカスタム CNN でも検出の scientific_name は同一なので、
+    英名(en_birdnet)の表記揺れ（"Night Heron" vs "Night-Heron" 等）に依存せず堅牢に解決できる。
     失敗時は空 dict（=どの検出も refine しない安全側）。
     """
     try:
@@ -58,9 +60,9 @@ def load_dispatch_map(cfg: dict) -> dict[str, str]:
             master = bfc / master
         out: dict[str, str] = {}
         for r in csv.DictReader(open(master, encoding="utf-8")):
-            g, st, name = r.get("group"), r.get("status"), (r.get("en_birdnet") or "").strip()
-            if name and g in active and st in _ROUTE_STATUSES:
-                out[name] = g
+            g, st, sci = r.get("group"), r.get("status"), (r.get("sci") or "").strip()
+            if sci and g in active and st in _ROUTE_STATUSES:
+                out[sci] = g
         return out
     except Exception as e:
         print(f"  [stage2] dispatch_map 構築失敗（refine無効化）: {e}", file=sys.stderr)

@@ -1,0 +1,31 @@
+week_from,week_to,sci,action,source,note
+# === カスタム季節上書き層 ===
+# eBirdメタモデルは多くの冬鳥で「夏の出現スコア床」を過大評価する(例:Rook夏0.31,Merganser夏0.30)。
+# ハード閾値(0.15)では落ちないため、北部九州で繁殖期(おおよそ week18-36 = 5月〜8月)に不在の
+# 明確な冬鳥を action=remove で明示除外する。留鳥・夏鳥・繁殖する種には触れないこと。
+# source は暫定的に図鑑/一般知見。★要: eBird bar-chart・環境省モニタリングサイト1000等の公的データで裏取り・精査。
+# action=add は逆に「在期だがeBirdに無い/低スコアな種」を足す枠(現状なし)。
+#
+# --- 冬鳥のカモ類(北部九州で繁殖せず冬季のみ。dispatch対象でもあるが夏は不在が正) ---
+18,36,Anas crecca,remove,図鑑(冬鳥/要公的裏取り),コガモ 冬鳥
+18,36,Aythya ferina,remove,図鑑(冬鳥/要公的裏取り),ホシハジロ 冬鳥
+18,36,Mareca penelope,remove,図鑑(冬鳥/要公的裏取り),ヒドリガモ 冬鳥
+18,36,Mareca falcata,remove,図鑑(冬鳥/要公的裏取り),ヨシガモ 冬鳥
+18,36,Mareca strepera,remove,図鑑(冬鳥/要公的裏取り),オカヨシガモ 冬鳥
+18,36,Aythya fuligula,remove,図鑑(冬鳥/要公的裏取り),キンクロハジロ 冬鳥(夏の滞留は稀)
+18,36,Mergus merganser,remove,図鑑(冬鳥/A/Bテストで残存FP),カワアイサ 冬鳥
+18,36,Mergus serrator,remove,図鑑(冬鳥/要公的裏取り),ウミアイサ 冬鳥
+18,36,Tadorna tadorna,remove,図鑑(冬鳥/有明海周辺/要公的裏取り),ツクシガモ 冬鳥
+# --- 冬鳥の小鳥・その他(繁殖期不在) ---
+18,36,Turdus pallidus,remove,図鑑(冬鳥/要公的裏取り),シロハラ 冬鳥
+18,36,Turdus eunomus,remove,図鑑(冬鳥/要公的裏取り),ツグミ 冬鳥
+18,36,Fringilla montifringilla,remove,図鑑(冬鳥/要公的裏取り),アトリ 冬鳥
+18,36,Spinus spinus,remove,図鑑(冬鳥/要公的裏取り),マヒワ 冬鳥
+18,36,Coccothraustes coccothraustes,remove,図鑑(冬鳥/要公的裏取り),シメ 冬鳥
+18,36,Emberiza schoeniclus,remove,図鑑(冬鳥/要公的裏取り),オオジュリン 冬鳥
+18,36,Emberiza elegans,remove,図鑑(冬鳥/要公的裏取り),ミヤマホオジロ 冬鳥
+18,36,Anthus hodgsoni,remove,図鑑(冬鳥/要公的裏取り),ビンズイ 冬鳥
+18,36,Tarsiger cyanurus,remove,図鑑(冬鳥/要公的裏取り),ルリビタキ 冬鳥(山地で少数繁殖あり/要確認)
+18,36,Podiceps nigricollis,remove,図鑑(冬鳥/要公的裏取り),ハジロカイツブリ 冬鳥
+# --- 冬の群れガラス(eBird夏床0.31過大) ---
+18,36,Corvus frugilegus,remove,図鑑(冬鳥/eBird夏床過大),ミヤマガラス 北部九州で冬鳥

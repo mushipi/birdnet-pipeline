@@ -160,6 +160,14 @@ flowchart TD
 
 ## 10. 未実装・残課題
 
+- [x] **Stage1 カスタムCNN本番化 ＋ 自前季節フィルタ**（2026-06-20, 詳細 `DEVLOG.md` 2026-06-20 / `docs/retrain_candidates.md`）
+  - 素6Kは季節無視で冬鳥FPが70%（北部九州5月）。**カスタム分類器使用時は birdnetlib の eBird季節/地域予測が
+    構造的に無効**（`classifier_model_path==None` ガード）→ 自前の週次季節フィルタを実装。
+  - 九州北部 applicable CNN(165クラス)へ切替＋ `tools/build_seasonal_occurrence.py`(eBirdメタ→週×種)＋
+    `data/seasonal_overrides.csv`(人手キュレーション層)＋ **dispatch を sci 駆動化**（英名表記揺れ非依存）。
+  - 実フィールド A/B: 冬鳥/別地域FP **36→0**・留鳥非劣化 → 本番切替。ロールバック= `settings.birdnet_model_path=null`。
+  - 残: ①override の公的データ裏取り(eBird bar-chart/環境省) ②165クラス欠落種の再学習(ホトトギス等→`retrain_candidates.md`)
+    ③難録音をゴイサギに寄せる癖の監視 ④**検出粒度をイベント単位へ**(現「種×ファイル」→「セグメント→種」, go-live前が好機)。
 - [x] **GT105 CPU 推論テスト**（2026-06-12 合格: 109ms/chunk・energyゲート/複合クラス CPU 再現・cadence余裕）
 - [x] **process.py ルーティングフック**（2026-06-13 実装・GT105でE2E検証, commit 553ae1b）
   - **group 汎用 dispatcher**: `species_taxonomy.yaml` で stage2_model 設定済の群(現 duck/将来 crow/gull)を

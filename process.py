@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+import csv
 import json
 import re
 import shutil
@@ -34,6 +35,22 @@ SPECIES_LIST_FILE = _settings.get("species_list_file")  # オプション。eBir
 # Stage1 モデル選択（未設定なら素の BirdNET_GLOBAL_6K_V2.4、設定すれば mainPC 追加学習のカスタム分類器）
 BIRDNET_MODEL_PATH = _settings.get("birdnet_model_path")
 BIRDNET_LABELS_PATH = _settings.get("birdnet_labels_path")
+_USE_CUSTOM_CLASSIFIER = bool(BIRDNET_MODEL_PATH and BIRDNET_LABELS_PATH)
+
+# 季節フィルタ（自前・週次の在期種許可リスト）。
+# カスタム分類器使用時は birdnetlib の eBird 季節/地域予測が構造的に無効化されるため、
+# 季節 FP（冬鳥の高確信度誤検出など）を落とすには自前の週次フィルタが必須。
+# enabled 時: 録音週の在期種だけを analyzer.custom_species_list に渡し、Recording へ lat/lon を渡さない
+#   （custom_species_list と lat/lon の併用は birdnetlib が ValueError を投げるため）。
+_SEASONAL_CFG = _settings.get("seasonal_filter", {}) or {}
+_SEASONAL_ENABLED = bool(_SEASONAL_CFG.get("enabled"))
+_SEASONAL_THRESHOLD = float(_SEASONAL_CFG.get("threshold", 0.15))  # eBird出現スコアのハード下限
+_SEASONAL_OCC_CSV = _SEASONAL_CFG.get("occurrence_csv", "data/seasonal_occurrence.csv")
+_SEASONAL_OVR_CSV = _SEASONAL_CFG.get("overrides_csv", "data/seasonal_overrides.csv")
+_SEASONAL_OCC: dict[int, list[tuple[str, float, bool]]] = {}  # week -> [(label, score, in_ebird)]
+_SCI_TO_LABEL: dict[str, str] = {}  # sci -> "学名_英名"
+_SEASONAL_OVR: list[tuple[int, int, str, str]] = []  # (week_from, week_to, sci, action)
+_SEASONAL_CACHE: dict[int, list[str]] = {}  # week -> allowlist（メモ化）
 
 # Stage2 統合（既定 disabled = 完全 no-op。明示有効化までは従来挙動を保つ）
 _STAGE2_CFG = _settings.get("stage2", {}) or {}
@@ -66,6 +83,71 @@ def _load_species_list() -> list[str] | None:
 
 
 _SPECIES_LIST = _load_species_list()
+
+
+def _resolve_path(p: str) -> Path:
+    path = Path(p).expanduser()
+    return path if path.is_absolute() else BASE_DIR / path
+
+
+def _load_seasonal_tables() -> None:
+    """季節フィルタの素データ(seasonal_occurrence.csv)とカスタム上書き(seasonal_overrides.csv)を読み込む。
+
+    occurrence は build_seasonal_occurrence.py の生成物（週×種×eBirdスコア）。
+    overrides は人手キュレーション層（環境省/野鳥の会/現地知見を後から add/remove で足す）。
+    """
+    occ = _resolve_path(_SEASONAL_OCC_CSV)
+    if not occ.exists():
+        raise FileNotFoundError(f"季節フィルタ表が無い: {occ}（tools/build_seasonal_occurrence.py で生成して）")
+    _SEASONAL_OCC.clear(); _SCI_TO_LABEL.clear(); _SEASONAL_OVR.clear(); _SEASONAL_CACHE.clear()
+    for r in csv.DictReader(open(occ, encoding="utf-8")):
+        w = int(r["week_48"]); label = r["label"]; sci = r["sci"]
+        score = float(r["ebird_score"]); in_ebird = (r["in_ebird"].strip().lower() == "true")
+        _SEASONAL_OCC.setdefault(w, []).append((label, score, in_ebird))
+        _SCI_TO_LABEL[sci] = label
+    ovr = _resolve_path(_SEASONAL_OVR_CSV)
+    if ovr.exists():
+        for r in csv.DictReader(open(ovr, encoding="utf-8")):
+            wf = (r.get("week_from") or "").strip()
+            if not wf.isdigit():  # コメント行(# ...)や空行は week_from が数字でない→スキップ
+                continue
+            sci = (r.get("sci") or "").strip()
+            action = (r.get("action") or "").strip().lower()
+            if not sci or action not in ("add", "remove"):
+                continue
+            _SEASONAL_OVR.append((int(wf), int((r.get("week_to") or wf).strip()), sci, action))
+
+
+def seasonal_allowlist(week_48: int) -> list[str]:
+    """指定週(1..48)の在期種 '学名_英名' 許可リスト。ハード方式（eBirdスコア≥閾値）＋overrides。
+
+    - in_ebird=False（eBirdに該当学名が無い種）は誤って落とさないよう常に在期扱い。
+    - overrides: action=add で強制在期、action=remove で強制除外（eBirdメタモデルの粗さの補正口）。
+    """
+    if week_48 in _SEASONAL_CACHE:
+        return _SEASONAL_CACHE[week_48]
+    allow = set()
+    for label, score, in_ebird in _SEASONAL_OCC.get(week_48, []):
+        if (not in_ebird) or score >= _SEASONAL_THRESHOLD:
+            allow.add(label)
+    for wf, wt, sci, action in _SEASONAL_OVR:
+        if wf <= week_48 <= wt:
+            label = _SCI_TO_LABEL.get(sci)
+            if not label:
+                continue
+            if action == "add":
+                allow.add(label)
+            elif action == "remove":
+                allow.discard(label)
+    out = sorted(allow)
+    _SEASONAL_CACHE[week_48] = out
+    return out
+
+
+def _week_48_of(ts: datetime) -> int:
+    """birdnetlib と同じ 48 週インデックス（月×4 + 月内週）。"""
+    from birdnetlib.utils import return_week_48_from_datetime
+    return return_week_48_from_datetime(ts)
 
 
 def build_analyzer() -> Analyzer:
@@ -185,15 +267,18 @@ def analyze_file(analyzer: Analyzer, wav_path: Path, ts: datetime, lat: float, l
     if mono_path is None:
         return []
     try:
+        # 季節フィルタ有効時は custom_species_list（週次在期種）を analyzer 側で使うため、
+        # Recording へ lat/lon を渡さない（併用は birdnetlib が ValueError を投げる）。
+        # 無効時は従来どおり lat/lon を渡し birdnetlib の地域フィルタに任せる。
+        loc = {} if _SEASONAL_ENABLED else {"lat": lat, "lon": lon}
         recording = Recording(
             analyzer,
             str(mono_path),
             date=ts,
-            lat=lat,
-            lon=lon,
             min_conf=CONF_LOW,
             overlap=2.0,
             sensitivity=1.25,
+            **loc,
         )
         recording.analyze()
         detections = recording.detections
@@ -253,10 +338,15 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
 
     print(f"Analyzer をロード中... (pi_id={pi_id}, noise_reduction={nr_mode})")
     analyzer = build_analyzer()
-    if _SPECIES_LIST:
-        # eBird 由来などのホワイトリストを Analyzer に登録（地域・季節フィルタを補強）
+    if _SEASONAL_ENABLED:
+        # 自前の週次季節フィルタ。許可リストは録音ごとに週で切り替える（下のループ内でセット）。
+        _load_seasonal_tables()
+        print(f"  季節フィルタ: 有効（{_SEASONAL_OCC_CSV}, 閾値{_SEASONAL_THRESHOLD}, "
+              f"override {len(_SEASONAL_OVR)}件）")
+    elif _SPECIES_LIST:
+        # 従来: eBird 由来の通年ホワイトリストを登録（季節フィルタ無効時）
         analyzer.custom_species_list = _SPECIES_LIST
-        print(f"  custom_species_list: {len(_SPECIES_LIST)} 種を許可リストに設定")
+        print(f"  custom_species_list: {len(_SPECIES_LIST)} 種を許可リストに設定（通年）")
     db.init_db()
     species_cache = load_species_cache()
 
@@ -272,6 +362,10 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
             continue
         print(f"\n処理中: {wav_path.name}")
         ts = parse_timestamp(wav_path)
+        if _SEASONAL_ENABLED:
+            # 録音の週に応じた在期種だけを許可リストに（analyze_file は lat/lon を渡さない）
+            wk = _week_48_of(ts)
+            analyzer.custom_species_list = seasonal_allowlist(wk)
         detections = analyze_file(analyzer, wav_path, ts, eff_lat, eff_lon, noise_reduction=nr_mode)
         detections = filter_blacklist(detections, wav_path.name)
         date_str = ts.strftime("%Y-%m-%d")
@@ -308,7 +402,8 @@ def process_all(ingest_dir: Path, pi_id: str, lat: float, lon: float) -> None:
                 )
 
                 # Stage2: 専門分類器のある群(duck 等)なら同一窓を再分類し refined_* に追記（非破壊）
-                group = _DISPATCH_MAP.get(common_name) if _STAGE2_ENABLED else None
+                # dispatch は学名(sci)で解決（英名の表記揺れ・素6K↔カスタムCNN差に非依存）
+                group = _DISPATCH_MAP.get(sci_name) if _STAGE2_ENABLED else None
                 if group:
                     res = stage2_refine.refine_detection(
                         str(dest_path), det.get("start_time"), det.get("end_time"), group, _STAGE2_CFG)
