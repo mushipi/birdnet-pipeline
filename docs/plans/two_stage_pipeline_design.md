@@ -1,6 +1,7 @@
 # 全体設計: 2段 野鳥識別パイプライン（BirdNET → 群専用 Stage2 細分類）
 
-最終更新: 2026-06-14 / ステータス: **ルーティングフック実装済(GT105でE2E検証, settings既定disabled)・本番デプロイ未**
+最終更新: 2026-06-21 / ステータス: **Stage1=applicable カスタムCNN v2(200クラス)本番化＋自前季節フィルタ・GT105配備済**
+／ Stage2 ルーティングフック実装済(GT105でE2E検証, settings stage2.enabled=true)・本番go-liveは保留(systemd未enable)。
 ／ **群汎用基盤**: duck=運用モデル完成・**crow=Stage2完成+taxonomy登録済(配線のみ未)**・gull=予定。
 
 このドキュメントは BirdProject（運用本体）と bird-fine-classifier（群専用 Stage2 細分類）を横断した
@@ -51,13 +52,19 @@ flowchart TD
   `energy_threshold` だけ替えて通る（§4・§5.5）。図の `{duck, crow, …}` は `species_taxonomy.yaml` に
   登録された群が自動で入る。
 
-## 3. Stage1: BirdNET（現行・実装済）
+## 3. Stage1: 九州北部 applicable カスタムCNN（現行・本番）
 
-- モデル: BirdNET_GLOBAL_6K_V2.4（`birdnetlib.Analyzer`）。
-- 設定（`process.py`）: `min_conf=CONF_LOW(0.25)`, `sensitivity=1.25`, lat/lon=33.579/130.257（北部九州）。
-- 閾値: `CONF_HIGH=0.65` 以上を confirmed として DB 記録。地域フィルタ＋eBirdホワイトリスト。
-- 仕分け: detected / review / unknown。
-- **役割（2段化後）**: 「カモ類が居る」までの**検出・トリガ**に徹する（種同定は Stage2 に委譲）。
+- **モデル: 九州北部 applicable CNN（v2 = 200クラス, 2026-06-21 配備）**。`birdnetlib.Analyzer(classifier_model_path=...)`。
+  - 素 BirdNET_GLOBAL_6K_V2.4 はフォールバック＝`settings.birdnet_model_path=null` で即復帰（ロールバック経路）。
+  - 経緯: v1=165クラス(2026-06-20) → v2=200クラス（追加35＝達成30＋ボーダー救済≥20の5）。詳細 memory `birdnet-applicable-model-run`。
+  - 精度(holdout): macro-F1(birds) **0.758** / Top-1 0.724。素6K比較 **+0.151**（素は28/200種を全く検出不可）＝baseline guard 合格。
+- **自前 週次季節フィルタ**（カスタム分類器使用時は birdnetlib の eBird 季節/地域予測が `classifier_model_path!=None` で構造的に無効化されるため必須）:
+  - `tools/build_seasonal_occurrence.py`（eBird メタモデル→週×種, **学名キーで200ラベルへ突合**）→ `data/seasonal_occurrence.csv`（48週×200種）。
+  - `data/seasonal_overrides.csv`（人手キュレーション層 add/remove）。
+  - process.py が録音週の在期種だけを `analyzer.custom_species_list` にセット（custom時 lat/lon は渡さない＝併用で birdnetlib が ValueError）。実フィールドで冬鳥/別地域 FP **36→0**。
+- **ラベルは Sci_Common（学名_英名）に統一**（dispatch・季節表が学名キーのため必須）。⚠ v2 学習は**英名フォルダ名でラベル出力**するので、配備前に **en→sci クロスウォークで行順保持のまま Sci_Common 化**する後処理が要る（行順=tflite出力順）。これは未スクリプト化＝恒久対策は §10 / `species-identity-key-DRAFT.md`。
+- 設定（`process.py`）: `min_conf=CONF_LOW(0.25)`, `sensitivity=1.25`, `CONF_HIGH=0.65` 以上を confirmed。仕分け: detected / review / unknown。
+- **役割（2段化後）**: 検出・トリガ＋**長尾種の同定**（[[birdnet-routing-design]]）。Stage2 を持つ群（duck 等）は種同定を Stage2 に委譲。
 
 ## 4. Dispatcher / ルーティング
 
@@ -166,8 +173,16 @@ flowchart TD
   - 九州北部 applicable CNN(165クラス)へ切替＋ `tools/build_seasonal_occurrence.py`(eBirdメタ→週×種)＋
     `data/seasonal_overrides.csv`(人手キュレーション層)＋ **dispatch を sci 駆動化**（英名表記揺れ非依存）。
   - 実フィールド A/B: 冬鳥/別地域FP **36→0**・留鳥非劣化 → 本番切替。ロールバック= `settings.birdnet_model_path=null`。
-  - 残: ①override の公的データ裏取り(eBird bar-chart/環境省) ②165クラス欠落種の再学習(ホトトギス等→`retrain_candidates.md`)
-    ③難録音をゴイサギに寄せる癖の監視 ④**検出粒度をイベント単位へ**(現「種×ファイル」→「セグメント→種」, go-live前が好機)。
+  - 残: ①override の公的データ裏取り(eBird bar-chart/環境省) ③難録音をゴイサギに寄せる癖の監視 ④**検出粒度をイベント単位へ**(現「種×ファイル」→「セグメント→種」, go-live前が好機)。②の欠落種再学習は↓v2で実施。
+- [x] **Stage1 v2: applicable CNN 200クラス化＋配備**（2026-06-21, 詳細 memory `birdnet-applicable-model-run`）
+  - 165→200（追加35＝達成30＋ボーダー救済≥20の5）。XC全世界A/B収集＝**学名照会徹底で誤引きゼロ**。全ゲート合格(macro-F1 0.758/素6K比較+0.151)。GT105 へ rsync 配備・季節表200ラベル再生成(9600行)・E2Eスモーク合格。
+  - **踏んだ罠＝v2学習はラベルを英名フォルダ名で出力**（v1の sci統一が未スクリプト化で適用漏れ）→季節表が112/200しか当たらず発覚→ species_master(en→sci 172)＋訂正CSV(28)でクロスウォーク→**行順保持で Sci_Common 化**して修復。
+  - 弱クラス(既知): ホトトギス F1 0.54(本命だが recall0.38 控えめ)、ボーダー救済組(オオセグロ0.22/ミコアイサ0.25/チゴモズ0.39)=データ枯渇の代償。
+  - 収集不能3種(ウミウ=録音皆無 / イカル・シマアオジ(CR)=XC `file`=None でAPI DL不可)＋在庫<20種は `data/raw_holdout_v2/` 退避(次回)。
+  - 残: ①species_master 新28種追記(sci/en_birdnet/taxon_id/group) ②**sci統一のスクリプト化＋検証lint**(恒久対策=下記ADR) ③seasonal_overrides 新種在期週の裏取り。
+- [ ] **【設計】種同一性キーを iNat taxon_id に一本化**（ドラフトADR: `docs/plans/species-identity-key-DRAFT.md` / memory `species-identity-key-adr`）
+  - 種キーが層ごとに別(XC=学名/フォルダ=英名/ラベル=Sci_Common/dispatch・季節表=学名/master=taxon_id+sci+en×2+ja)で全部不安定(sci改名・en2系統・ja揺れ)。v2の en ラベル事故・コチドリ誤判定(旧属名Charadrius)・和名↔学名ズレ15件が実害。
+  - 決: **taxon_id(iNat)主キー化**、species_master を正本クロスウォーク(`xc_sci`/`model_label` 列追加)、**検証lint を retrain/配備前ゲート**に。段階移行(v2学習完了後に正式ADR化)。
 - [x] **GT105 CPU 推論テスト**（2026-06-12 合格: 109ms/chunk・energyゲート/複合クラス CPU 再現・cadence余裕）
 - [x] **process.py ルーティングフック**（2026-06-13 実装・GT105でE2E検証, commit 553ae1b）
   - **group 汎用 dispatcher**: `species_taxonomy.yaml` で stage2_model 設定済の群(現 duck/将来 crow/gull)を
@@ -199,6 +214,9 @@ flowchart TD
 
 ## 付録: 関連資料
 
+- Stage1 applicable CNN 作成/v2再学習: memory `birdnet-applicable-model-run` / `BirdProject/docs/retrain_candidates.md`
+- **種同一性キー設計(taxon_id一本化, ドラフトADR)**: `BirdProject/docs/plans/species-identity-key-DRAFT.md` / memory `species-identity-key-adr`
+- Stage1 v2再学習プラン: `~/.claude/plans/rustling-swimming-gosling.md`
 - Stage2 全経緯: `bird-fine-classifier/docs/perch_kd_report.md`
-- 旧改善計画: `BirdProject/docs/plans/future_model_improvements.md`（Phase 5-D/5-E）
+- 旧改善計画: `BirdProject/docs/plans/future_model_improvements.md`（Phase 5-D/5-E。applicable CNN ルートで実質置換済）
 - 運用設計: `BirdProject/DESIGN.md`（現行単段）
