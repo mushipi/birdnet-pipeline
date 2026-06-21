@@ -59,6 +59,157 @@ def save_settings(data: dict) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+# ---- 種マスタ（sci → taxon_id / 和名）。iNat taxon_id リンク＋和名統一に使う ----
+import csv as _csv
+
+def _species_master_path() -> Path:
+    # 既定は bird-fine-classifier の正本。無ければ None。
+    for p in (Path.home() / "bird-fine-classifier/data/species_master.csv",
+              PROJECT_DIR.parent / "bird-fine-classifier/data/species_master.csv"):
+        if p.exists():
+            return p
+    return Path("/nonexistent")
+
+def load_species_master() -> dict:
+    """sci → {taxon_id, ja} を返す（同一種の役割行は taxon_id/ja を優先採用）。"""
+    out: dict = {}
+    p = _species_master_path()
+    if not p.exists():
+        return out
+    for r in _csv.DictReader(open(p, encoding="utf-8")):
+        sci = (r.get("sci") or "").strip()
+        if not sci:
+            continue
+        tax = (r.get("taxon_id") or "").strip().replace(".0", "")
+        ja = (r.get("ja") or "").strip()
+        cur = out.setdefault(sci, {"taxon_id": "", "ja": ""})
+        if tax and not cur["taxon_id"]:
+            cur["taxon_id"] = tax
+        if ja and not cur["ja"]:
+            cur["ja"] = ja
+    return out
+
+SPECIES_MASTER = load_species_master()
+
+
+# ---- 季節フィルタ表（閲覧時計算。process.py は import しない＝birdnetlib回避） ----
+def week_48_of(dt: datetime) -> int:
+    """BirdNET 48週インデックス（月を4分割）。birdnetlib と同じ式。"""
+    return (dt.month - 1) * 4 + min((dt.day - 1) // 7, 3) + 1
+
+def _seasonal_csv() -> Path:
+    return PROJECT_DIR / "data/seasonal_occurrence.csv"
+
+def load_seasonal() -> dict:
+    """week_48 → {sci: {label, score, in_ebird}} を返す。"""
+    out: dict = {}
+    p = _seasonal_csv()
+    if not p.exists():
+        return out
+    for r in _csv.DictReader(open(p, encoding="utf-8")):
+        try:
+            w = int(r["week_48"])
+        except (KeyError, ValueError):
+            continue
+        out.setdefault(w, {})[(r.get("sci") or "").strip()] = {
+            "label": r.get("label", ""),
+            "score": float(r.get("ebird_score") or 0),
+            "in_ebird": (r.get("in_ebird", "").strip().lower() == "true"),
+        }
+    return out
+
+def load_overrides() -> list:
+    """seasonal_overrides.csv → [(week_from, week_to, sci, action)]（人手キュレーション層）。"""
+    out = []
+    p = PROJECT_DIR / "data/seasonal_overrides.csv"
+    if not p.exists():
+        return out
+    for r in _csv.DictReader(open(p, encoding="utf-8")):
+        wf = (r.get("week_from") or "").strip()
+        if not wf.isdigit():
+            continue
+        action = (r.get("action") or "").strip().lower()
+        sci = (r.get("sci") or "").strip()
+        if sci and action in ("add", "remove"):
+            out.append((int(wf), int((r.get("week_to") or wf).strip()), sci, action))
+    return out
+
+SEASONAL = load_seasonal()
+OVERRIDES = load_overrides()
+_SEASONAL_THRESHOLD = (load_settings().get("seasonal_filter", {}) or {}).get("threshold", 0.15)
+
+def _override_for(sci: str, week: int):
+    """その週・種に効く override action（remove優先）。無ければ None。"""
+    hit = None
+    for wf, wt, s, action in OVERRIDES:
+        if s == sci and wf <= week <= wt:
+            if action == "remove":
+                return "remove"
+            hit = "add"
+    return hit
+
+def in_season(sci: str, dt: datetime) -> bool | None:
+    """その種がその録音週に在期か（overrides反映＝process.pyの実フィルタと一致）。表に無ければ None。"""
+    week = week_48_of(dt)
+    wk = SEASONAL.get(week)
+    if not wk:
+        return None
+    ov = _override_for(sci, week)
+    if ov == "remove":
+        return False
+    if ov == "add":
+        return True
+    e = wk.get(sci)
+    if e is None:
+        return False
+    return (not e["in_ebird"]) or e["score"] >= _SEASONAL_THRESHOLD
+
+
+def pipeline_status() -> dict:
+    """使用モデル・季節フィルタ・Stage2 の現在状態（読み取り専用パネル用）。"""
+    s = load_settings()
+    custom = bool(s.get("birdnet_model_path") and s.get("birdnet_labels_path"))
+    n_classes = None
+    lp = s.get("birdnet_labels_path")
+    if lp:
+        lpath = Path(lp)
+        if not lpath.is_absolute():
+            lpath = PROJECT_DIR / lp
+        if lpath.exists():
+            n_classes = sum(1 for ln in open(lpath, encoding="utf-8") if ln.strip())
+    seasonal = s.get("seasonal_filter", {}) or {}
+    stage2 = s.get("stage2", {}) or {}
+    return {
+        "model": f"カスタムCNN（{n_classes}クラス）" if custom else "素 BirdNET_GLOBAL_6K_V2.4",
+        "model_custom": custom,
+        "n_classes": n_classes,
+        "seasonal_enabled": bool(seasonal.get("enabled")),
+        "seasonal_threshold": seasonal.get("threshold", 0.15),
+        "stage2_enabled": bool(stage2.get("enabled")),
+    }
+
+
+def enrich_rows(rows) -> list[dict]:
+    """検出行に taxon_id / 和名(master優先) / 在期判定 を付与（テンプレ表示用）。"""
+    out = []
+    for r in rows:
+        d = dict(r)
+        sci = (d.get("scientific_name") or "").strip()
+        m = SPECIES_MASTER.get(sci, {})
+        d["taxon_id"] = m.get("taxon_id") or ""
+        if not (d.get("species_jp") or "").strip() and m.get("ja"):
+            d["species_jp"] = m["ja"]
+        d["in_season"] = None
+        ts = d.get("timestamp")
+        if sci and ts:
+            try:
+                d["in_season"] = in_season(sci, datetime.fromisoformat(ts))
+            except (ValueError, TypeError):
+                pass
+        out.append(d)
+    return out
+
+
 def push_record_config_to_pi(pi_host: str, start: int, stop: int, segment_sec: int, all_day: bool) -> None:
     config = f"RECORD_ALL_DAY={'1' if all_day else '0'}\nRECORD_START={start}\nRECORD_STOP={stop}\nSEGMENT_SEC={segment_sec}\n"
     subprocess.run(
@@ -90,6 +241,7 @@ async def index(
     date_to: str | None = None,
     min_conf: str | None = None,
     species: str | None = None,
+    refined_status: str | None = None,
 ):
     # 手動で float 変換（空文字列などのパースエラー回避）
     try:
@@ -106,13 +258,14 @@ async def index(
         date_to=date_to,
         min_conf=min_conf_frac,
         species=species,
+        refined_status=refined_status,
     )
     pi_list = db.get_distinct_pi_ids()
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
-            "rows": [dict(r) for r in rows],
+            "rows": enrich_rows(rows),
             "current_status": status or "all",
             "current_pi_id": pi_id or "",
             "pi_list": pi_list,
@@ -120,6 +273,8 @@ async def index(
             "date_to": date_to or "",
             "min_conf": int(min_conf_val) if min_conf_val is not None else "",
             "species": species or "",
+            "refined_status": refined_status or "",
+            "pipeline": pipeline_status(),
         },
     )
 
@@ -229,7 +384,49 @@ async def pi_test_record():
 async def settings_page(request: Request):
     data = load_settings()
     return templates.TemplateResponse(
-        "settings.html", {"request": request, "settings": data}
+        "settings.html", {"request": request, "settings": data, "pipeline": pipeline_status()}
+    )
+
+
+@app.get("/season")
+async def season_page(request: Request, week: int | None = None):
+    """今週(または指定週)の在期許可リストを表示。"""
+    wk = week or week_48_of(datetime.now())
+    wkmap = SEASONAL.get(wk, {})
+    thr = _SEASONAL_THRESHOLD
+    species = []
+    for sci, e in wkmap.items():
+        ov = _override_for(sci, wk)
+        if ov == "remove":
+            allowed = False
+        elif ov == "add":
+            allowed = True
+        else:
+            allowed = (not e["in_ebird"]) or e["score"] >= thr
+        species.append({
+            "sci": sci, "label": e["label"], "score": e["score"],
+            "in_ebird": e["in_ebird"], "allowed": allowed,
+            "taxon_id": SPECIES_MASTER.get(sci, {}).get("taxon_id", ""),
+            "ja": SPECIES_MASTER.get(sci, {}).get("ja", ""),
+        })
+    species.sort(key=lambda x: (not x["allowed"], -x["score"]))
+    allowed_n = sum(1 for s in species if s["allowed"])
+    return templates.TemplateResponse(
+        "season.html",
+        {"request": request, "week": wk, "threshold": thr,
+         "species": species, "allowed_n": allowed_n, "total_n": len(species),
+         "now_week": week_48_of(datetime.now())},
+    )
+
+
+@app.get("/triage")
+async def triage_page(request: Request, pi_id: str | None = None):
+    """pending を捌く軽量キュー。"""
+    rows = db.get_detections(status="pending", pi_id=pi_id)
+    return templates.TemplateResponse(
+        "triage.html",
+        {"request": request, "rows": enrich_rows(rows),
+         "current_pi_id": pi_id or "", "pi_list": db.get_distinct_pi_ids()},
     )
 
 

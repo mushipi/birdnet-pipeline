@@ -128,8 +128,9 @@ def get_detections(
     date_to: str | None = None,
     min_conf: float | None = None,
     species: str | None = None,
+    refined_status: str | None = None,
 ) -> list[sqlite3.Row]:
-    """status / pi_id / date_from / date_to / min_conf / species でフィルタした detections を新しい順に返す。"""
+    """status / pi_id / date_from / date_to / min_conf / species / refined_status でフィルタした detections を新しい順に返す。"""
     sql = "SELECT * FROM detections"
     params: list = []
     conditions = []
@@ -156,6 +157,9 @@ def get_detections(
     if species:
         conditions.append("species LIKE ?")
         params.append(f"%{species}%")
+    if refined_status:
+        conditions.append("refined_status = ?")
+        params.append(refined_status)
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY timestamp DESC"
@@ -189,6 +193,14 @@ def get_stats(
             params
         ).fetchall()
         status_counts = {r["status"]: r["cnt"] for r in rows}
+
+        # Stage2 refined 別件数（期間内）: refined / ood_rejected
+        rows = conn.execute(
+            f"SELECT refined_status, COUNT(*) as cnt FROM detections "
+            f"WHERE refined_status IS NOT NULL AND {cond} GROUP BY refined_status",
+            params
+        ).fetchall()
+        refined_counts = {r["refined_status"]: r["cnt"] for r in rows}
 
         # 種別 confirmed 件数（上位20種）
         rows = conn.execute(
@@ -253,6 +265,7 @@ def get_stats(
 
     return {
         "status_counts": status_counts,
+        "refined_counts": refined_counts,
         "top_species":   top_species,
         "hourly":        hourly,
         "daily_counts":  daily_counts,

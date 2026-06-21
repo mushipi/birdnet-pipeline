@@ -167,6 +167,20 @@
   </header>
 
   <div class="container">
+    {% if pipeline %}
+    <h2>パイプライン状態（読み取り専用）</h2>
+    <div class="form-card" style="display:flex; flex-wrap:wrap; gap:18px; padding:14px 16px;">
+      <div><div style="font-size:0.78rem; color:#888;">Stage1 モデル</div>
+        <div style="font-weight:600;">{{ pipeline.model }}</div></div>
+      <div><div style="font-size:0.78rem; color:#888;">季節フィルタ</div>
+        <div style="font-weight:600; color:{{ '#27ae60' if pipeline.seasonal_enabled else '#888' }};">
+          {{ 'ON（閾値 ' ~ pipeline.seasonal_threshold ~ '）' if pipeline.seasonal_enabled else 'OFF' }}</div></div>
+      <div><div style="font-size:0.78rem; color:#888;">Stage2 細分類</div>
+        <div style="font-weight:600; color:{{ '#27ae60' if pipeline.stage2_enabled else '#888' }};">
+          {{ 'ON' if pipeline.stage2_enabled else 'OFF' }}</div></div>
+    </div>
+    {% endif %}
+
     <h2>取り込み設定</h2>
 
     {% if saved %}

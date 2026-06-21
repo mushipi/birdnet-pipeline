@@ -424,6 +424,23 @@
       </div>
     </div>
 
+    <!-- Stage2 細分類 -->
+    {% if refined_counts %}
+    <div class="section">
+      <h2>Stage2 細分類（期間内）</h2>
+      <div class="cards">
+        <div class="card confirmed">
+          <div class="label">refined（再分類）</div>
+          <div class="value">{{ refined_counts.get('refined', 0) }}</div>
+        </div>
+        <div class="card noise">
+          <div class="label">OOD棄却</div>
+          <div class="value">{{ refined_counts.get('ood_rejected', 0) }}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- チャートグリッド: ドーナツ + 折れ線 -->
     <div class="section chart-grid">
       <div class="chart-box">

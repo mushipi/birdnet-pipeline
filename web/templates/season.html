@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>季節フィルタ - BirdProject</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f5f7fa; color: #2c3e50; }
+    header { background: #fff; padding: 12px 16px; border-bottom: 1px solid #e1e8ed; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; margin: 0; }
+    header a { color: #2980b9; text-decoration: none; font-size: 0.9rem; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .summary { background: #fff; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; border: 1px solid #e1e8ed; }
+    .summary b { font-size: 1.3rem; color: #27ae60; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.88rem; }
+    th { background: #f0f3f6; font-size: 0.8rem; color: #555; }
+    tr.out { color: #aaa; }
+    .pill { font-size: 0.72rem; padding: 1px 7px; border-radius: 8px; }
+    .pill.in { background: #eaf6ef; color: #1e8449; }
+    .pill.out { background: #f3f3f3; color: #999; }
+    .wk-nav a { margin: 0 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>季節フィルタ — 第 {{ week }} 週（48週制）</h1>
+    <span class="wk-nav">
+      <a href="/season?week={{ week-1 if week>1 else 48 }}">◀ 前週</a>
+      {% if week != now_week %}<a href="/season">今週へ</a>{% endif %}
+      <a href="/season?week={{ week+1 if week<48 else 1 }}">翌週 ▶</a>
+    </span>
+    <a href="/" style="margin-left:auto;">← 検出一覧</a>
+  </header>
+  <div class="wrap">
+    <div class="summary">
+      この週に在期（検出許可）の種：<b>{{ allowed_n }}</b> / {{ total_n }} 種（閾値 {{ threshold }}）<br>
+      <span style="font-size:0.8rem; color:#888;">在期外の種は Stage1 の許可リストから外れ、検出されない（冬鳥FP抑制）。</span>
+    </div>
+    {% if species %}
+    <table>
+      <thead><tr><th>判定</th><th>和名</th><th>学名</th><th>eBirdスコア</th><th>eBird収載</th></tr></thead>
+      <tbody>
+        {% for s in species %}
+        <tr class="{{ '' if s.allowed else 'out' }}">
+          <td>{% if s.allowed %}<span class="pill in">在期</span>{% else %}<span class="pill out">季節外</span>{% endif %}</td>
+          <td>{{ s.ja or '—' }}</td>
+          <td><a href="{% if s.taxon_id %}https://www.inaturalist.org/taxa/{{ s.taxon_id }}{% else %}https://www.inaturalist.org/search?q={{ s.sci }}{% endif %}" target="_blank" style="color:#2980b9; text-decoration:none;">{{ s.sci }}</a></td>
+          <td>{{ "%.3f"|format(s.score) }}</td>
+          <td>{{ '○' if s.in_ebird else '—（常時許可）' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>この週のデータがありません（data/seasonal_occurrence.csv 未生成？）。</p>
+    {% endif %}
+  </div>
+</body>
+</html>

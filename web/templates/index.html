@@ -558,6 +558,12 @@
         <div class="pi-dot" id="pi-dot"></div><span id="pi-label">Pi...</span>
       </div>
       <span class="last-ingest" id="last-ingest"></span>
+      {% if pipeline %}
+      <span class="pipeline-badge" title="使用モデル / 季節フィルタ / Stage2"
+        style="font-size:0.72rem; background:#eef3f8; color:#2c3e50; border:1px solid #d4dde6; border-radius:10px; padding:2px 8px;">
+        🧠 {{ pipeline.model }}{% if pipeline.seasonal_enabled %} · 季節ON{% endif %}{% if pipeline.stage2_enabled %} · Stage2ON{% endif %}
+      </span>
+      {% endif %}
       <span id="ingest-running-indicator" class="ingest-running" style="display:none;">
         <span class="spinner"></span>取り込み中
       </span>
@@ -565,6 +571,8 @@
     <div class="header-actions">
       <button class="btn-ingest" id="ingest-btn" onclick="triggerIngest()">取り込む</button>
       <div class="desktop-nav">
+        <a href="/triage">トリアージ</a>
+        <a href="/season">季節</a>
         <a href="/stats">統計</a>
         <a href="/labeled">ラベル</a>
         <a href="/whitelist">許可</a>
@@ -621,6 +629,14 @@
         <label>種名</label>
         <input type="text" name="species" value="{{ species }}" placeholder="例: Warbler">
       </div>
+      <div class="filter-group">
+        <label>Stage2</label>
+        <select name="refined_status">
+          <option value="">すべて</option>
+          <option value="refined" {% if refined_status=='refined' %}selected{% endif %}>refined（再分類）</option>
+          <option value="ood_rejected" {% if refined_status=='ood_rejected' %}selected{% endif %}>OOD棄却</option>
+        </select>
+      </div>
       <button type="submit" class="btn-search">検索</button>
       <a href="{{ '/?status=' + current_status if current_status != 'all' else '/' }}" class="btn-clear">クリア</a>
     </div>
@@ -639,21 +655,34 @@
         <div class="card-header">
           <div class="card-species">
             <div class="name">
-              {% if row.species_jp %}
-              {{ row.species_jp }}
-              <span style="font-size: 0.8rem; font-weight: normal; color: #888;">({{ row.species }})</span>
-              {% else %}
-              {{ row.species or "不明" }}
-              {% endif %}
+              {{ row.species_jp or row.species or "不明" }}
               {% if row.scientific_name %}
-              <a href="https://www.inaturalist.org/search?q={{ row.scientific_name }}" target="_blank"
+              <a href="{% if row.taxon_id %}https://www.inaturalist.org/taxa/{{ row.taxon_id }}{% else %}https://www.inaturalist.org/search?q={{ row.scientific_name }}{% endif %}" target="_blank"
                 style="text-decoration:none; vertical-align:middle; margin-left:4px;" title="iNaturalistで調べる">🔍</a>
+              {% endif %}
+              {% if row.in_season is sameas false %}
+              <span title="この録音週では季節外" style="font-size:0.7rem; color:#b9770e; margin-left:4px;">⚠季節外</span>
+              {% elif row.in_season is sameas true %}
+              <span title="録音週に在期" style="font-size:0.7rem; color:#27ae60; margin-left:4px;">在期</span>
               {% endif %}
             </div>
             <div class="meta">{{ row.timestamp[:16] }} &nbsp;·&nbsp; {{ row.pi_id }}</div>
           </div>
           <span class="badge badge-{{ row.status }}">{{ row.status }}</span>
         </div>
+
+        <!-- Stage2 細分類結果 -->
+        {% if row.refined_status == 'refined' %}
+        <div class="stage2-box" style="margin:4px 0; padding:6px 8px; background:#eaf6ef; border-left:3px solid #27ae60; border-radius:4px; font-size:0.85rem;">
+          <span style="color:#1e8449; font-weight:600;">→ {{ row.refined_label or row.refined_species }}</span>
+          <span style="color:#888;">（Stage2/{{ row.refined_group }}{% if row.refined_confidence is not none %} · {{ "%.0f"|format(row.refined_confidence*100) }}%{% endif %}{% if row.refined_energy is not none %} · energy {{ "%.2f"|format(row.refined_energy) }}{% endif %}）</span>
+          {% if row.stage2_model_version %}<span style="color:#aaa; font-size:0.72rem;"> {{ row.stage2_model_version }}</span>{% endif %}
+        </div>
+        {% elif row.refined_status == 'ood_rejected' %}
+        <div class="stage2-box" style="margin:4px 0; padding:6px 8px; background:#fdecea; border-left:3px solid #c0392b; border-radius:4px; font-size:0.82rem; color:#a93226;">
+          Stage2 OOD棄却（群外と判定）{% if row.refined_energy is not none %} · energy {{ "%.2f"|format(row.refined_energy) }}{% endif %}
+        </div>
+        {% endif %}
 
         <!-- 確信度バー -->
         {% if row.confidence is not none %}
@@ -671,6 +700,13 @@
           <audio controls preload="none">
             <source src="/audio/{{ row.file_path.lstrip('/') }}" type="audio/wav">
           </audio>
+        </div>
+        <div class="card-spec" style="margin-top:4px;">
+          <button type="button" class="btn-spec" style="font-size:0.78rem; color:#2c3e50; background:#eef3f8; border:1px solid #d4dde6; border-radius:6px; padding:3px 10px; cursor:pointer;"
+            onclick="this.style.display='none'; var cv=this.nextElementSibling; cv.style.display='block'; renderSpectrogram(cv, '/audio/{{ row.file_path.lstrip('/') }}');">
+            🌈 スペクトログラム
+          </button>
+          <canvas class="spec-canvas" style="display:none; width:100%; max-width:900px; height:auto; image-rendering:pixelated; background:#111; border-radius:4px; margin-top:4px;"></canvas>
         </div>
         {% endif %}
 
@@ -743,6 +779,7 @@
     </ul>
   </nav>
 
+  <script src="/static/spectrogram.js"></script>
   <script>
     // ===== Filter toggle =====
     let filterOpen = false;
